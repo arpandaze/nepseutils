@@ -6,9 +6,15 @@ authors = ["Daze <dazehere@yandex.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
+requests = "^2.25.1"
+tenacity = "^7.0.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
+pylint = "^2.7.4"
+rope = "^0.18.0"
+black = {version = "^20.8b1", allow-prereleases = true}
+flake8 = "^3.9.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
