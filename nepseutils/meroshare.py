@@ -77,7 +77,7 @@ class MeroShare:
             }
             sess.headers.update(headers)
             cap_req = sess.get("https://backend.cdsc.com.np/api/meroShare/capital/")
-            cap_list = json.loads(cap_req.content.decode("utf-8"))
+            cap_list = cap_req.json()
             any(
                 map(
                     lambda x: self.__capitals.update({x.get("code"): x.get("id")}),
@@ -249,9 +249,7 @@ class MeroShare:
                 )
                 assert issue_req.status_code == 200, "Applicable issues request failed!"
 
-                self.__applicable_issues = json.loads(
-                    issue_req.content.decode("utf-8")
-                ).get("object")
+                self.__applicable_issues = issue_req.json().get("object")
                 logging.info(f"Appplicable Issues Obtained! Account: {self.__name}")
         except Exception as error:
             logging.info(error)
@@ -277,10 +275,12 @@ class MeroShare:
                 }
                 sess.headers.update(headers)
 
-                details_req = sess.get(
+                details_json = sess.get(
                     f"https://webbackend.cdsc.com.np/api/meroShareView/myDetail/{self.__dmat}"
-                )
-                details_json = json.loads(details_req.content.decode("utf-8"))
+                ).json()
+                self.__dmat = details_json.get("boid")
+                self.__account = details_json.get("accountNumber")
+                self.__name = details_json.get("name")
                 return json.dumps(details_json, indent=2)
         except Exception:
             logging.error(
@@ -343,9 +343,7 @@ class MeroShare:
                     data=data,
                 )
 
-                recent_applied_response_json = json.loads(
-                    recent_applied_req.content
-                ).get("object")
+                recent_applied_response_json = recent_applied_req.json().get("object")
 
                 target_issue = None
 
@@ -378,7 +376,7 @@ class MeroShare:
                     f"https://webbackend.cdsc.com.np/api/meroShare/applicantForm/report/detail/{target_issue.get('applicantFormId')}",
                 )
 
-                details_response_json = json.loads(details_req.content)
+                details_response_json = details_req.json()
                 logging.info(
                     f"Status: {details_response_json.get('meroshareRemark')} for {self.__name}"
                 )
@@ -434,13 +432,13 @@ class MeroShare:
                 bank_req = sess.get(
                     "https://webbackend.cdsc.com.np/api/meroShare/bank/",
                 )
-                bank_id = json.loads(bank_req.content)[0].get("id")
+                bank_id = bank_req.json()[0].get("id")
 
                 bank_specific_req = sess.get(
                     f"https://webbackend.cdsc.com.np/api/meroShare/bank/{bank_id}"
                 )
 
-                bank_specific_response_json = json.loads(bank_specific_req.content)
+                bank_specific_response_json = bank_specific_req.json()
 
                 branch_id = bank_specific_response_json.get("accountBranchId")
                 account_number = bank_specific_response_json.get("accountNumber")
