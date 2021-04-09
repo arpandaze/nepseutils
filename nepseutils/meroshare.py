@@ -475,3 +475,26 @@ class MeroShare:
                 logging.warning(apply_req.status_code)
 
             logging.info(f"Sucessfully applied! Account: {self.__name}")
+
+    def check_result(self, company_id: str):
+        with self.__session as sess:
+            data = json.dumps({"boid": self.__dmat, "companyShareId": company_id})
+            headers = {
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Authorization": "null",
+                "Connection": "keep-alive",
+                "Content-Type": "application/json",
+                "Origin": "https://iporesult.cdsc.com.np",
+                "Referer": "https://iporesult.cdsc.com.np/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-GPC": "1",
+                "User-Agent": USER_AGENT,
+            }
+            sess.headers.update(headers)
+            result_req = sess.post(
+                "https://iporesult.cdsc.com.np/result/result/check", data=data
+            )
+            return result_req.json()
