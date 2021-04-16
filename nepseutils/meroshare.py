@@ -477,8 +477,13 @@ class MeroShare:
             logging.info(f"Sucessfully applied! Account: {self.__name}")
 
     def check_result(self, company_id: str):
-        with self.__session as sess:
-            data = json.dumps({"boid": self.__dmat, "companyShareId": company_id})
+        return MeroShare.check_result_with_dmat(company_id, self.__dmat)
+
+    @staticmethod
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
+    def check_result_with_dmat(company_id: str, dmat: str):
+        with requests.Session() as sess:
+            data = json.dumps({"boid": dmat, "companyShareId": company_id})
             headers = {
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "en-US,en;q=0.9",
