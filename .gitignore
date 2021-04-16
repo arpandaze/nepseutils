@@ -1,4 +1,7 @@
 dist/
 .vim/
 .vscode/
+__pycache__/
+capitals.json
+data.json
 test.py
