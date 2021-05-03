@@ -479,6 +479,90 @@ class MeroShare:
     def check_result(self, company_id: str):
         return MeroShare.check_result_with_dmat(company_id, self.__dmat)
 
+    def get_edis_history(self):
+        try:
+            with self.__session as sess:
+                headers = {
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Authorization": self.__auth_token,
+                    "Connection": "keep-alive",
+                    "Origin": "https://meroshare.cdsc.com.np",
+                    "Referer": "https://meroshare.cdsc.com.np/",
+                    "Sec-Fetch-Dest": "empty",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Site": "same-site",
+                    "Sec-GPC": "1",
+                    "User-Agent": USER_AGENT,
+                }
+                sess.headers.update(headers)
+                data = json.dumps(
+                    {
+                        "filterFieldParams": [
+                            {
+                                "key": "requestStatus.name",
+                                "value": "",
+                                "alias": "Status",
+                            },
+                            {
+                                "key": "contractObligationMap.obligation.settleId",
+                                "alias": "Settlement Id",
+                            },
+                            {
+                                "key": "contractObligationMap.obligation.scriptCode",
+                                "alias": "Script",
+                            },
+                            {
+                                "key": "contractObligationMap.obligation.sellCmId",
+                                "alias": "CM ID",
+                                "condition": "': '",
+                            },
+                        ],
+                        "page": 1,
+                        "size": 200,
+                        "searchRoleViewConstants": "VIEW",
+                        "filterDateParams": [
+                            {
+                                "key": "contractObligationMap.obligation.settleDate",
+                                "condition": "",
+                                "alias": "",
+                                "value": "",
+                            },
+                            {
+                                "key": "contractObligationMap.obligation.settleDate",
+                                "condition": "",
+                                "alias": "",
+                                "value": "",
+                            },
+                            {
+                                "key": "requestedDate",
+                                "condition": "",
+                                "alias": "",
+                                "value": "",
+                            },
+                            {
+                                "key": "requestedDate",
+                                "condition": "",
+                                "alias": "",
+                                "value": "",
+                            },
+                        ],
+                    }
+                )
+
+                details_json = sess.post(
+                    "https://webbackend.cdsc.com.np/api/EDIS/report/search/",
+                    data=data,
+                ).json()
+                for item in details_json.get("object"):
+                    logging.info(
+                        f'Script: {item.get("contract").get("obligation").get("scriptCode")}, Status: {item.get("statusName")}, for account: {self.__name}'
+                    )
+        except Exception:
+            logging.error(
+                f"Details request failed! Retrying ({self.get_details.retry.statistics.get('attempt_number')})!"
+            )
+
     @staticmethod
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
     def check_result_with_dmat(company_id: str, dmat: str):
