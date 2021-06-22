@@ -1,10 +1,12 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import requests
 import json
 import logging
 import os
+from typing import Optional
+
+import requests
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.105 Safari/537.36"  # noqa
@@ -15,26 +17,26 @@ logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 class MeroShare:
     def __init__(
         self,
-        name=None,
-        dpid=None,
-        username=None,
-        password=None,
-        account=None,
-        dmat=None,
-        crn=None,
-        pin=None,
-        capital_id=None,
+        name: Optional[str] = None,
+        dpid: int = None,
+        username: int = None,
+        password: str = None,
+        pin: int = None,
+        crn: Optional[str] = None,
+        account: Optional[str] = None,
+        dmat: Optional[int] = None,
+        capital_id: Optional[int] = None,
     ):
 
         self.__name = name
-        self.__dpid = dpid
-        self.__username = username
+        self.__dpid = str(dpid)
+        self.__username = str(username)
         self.__password = password
         self.__account = account
-        self.__dmat = dmat
+        self.__dmat = str(dmat)
         self.__crn = crn
-        self.__pin = pin
-        self.__capital_id = capital_id
+        self.__pin = str(pin)
+        self.__capital_id = str(capital_id)
         self.__capitals = {}
         self.__session = requests.Session()
         self.__auth_token = None
@@ -134,6 +136,8 @@ class MeroShare:
 
                 self.__auth_token = login_req.headers.get("Authorization")
 
+                self._get_own_details()
+
                 with open("active.token", "w") as session_file:
                     session_file.write(self.__auth_token)
 
@@ -145,6 +149,43 @@ class MeroShare:
             logging.error(
                 f"Login request failed! Retrying ({self.login.retry.statistics.get('attempt_number')})!"
             )
+
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
+    def _get_own_details(self):
+        assert self.__auth_token, "Not logged in!"
+        if not (self.__dmat and self.__account and self.__name):
+            with self.__session as sess:
+                headers = {
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Authorization": self.__auth_token,
+                    "Connection": "keep-alive",
+                    "Origin": "https://meroshare.cdsc.com.np",
+                    "Referer": "https://meroshare.cdsc.com.np/",
+                    "Sec-Fetch-Dest": "empty",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Site": "same-site",
+                    "Sec-GPC": "1",
+                    "User-Agent": USER_AGENT,
+                }
+                sess.headers.update(headers)
+
+                own_details = sess.get(
+                    "https://webbackend.cdsc.com.np/api/meroShare/ownDetail/"
+                ).json()
+
+                if not self.__dmat:
+                    self.__dmat = own_details.get("demat")
+
+                if not self.__name:
+                    self.__name = own_details.get("name")
+
+                if not self.__account:
+                    account_details = sess.get(
+                        f"https://webbackend.cdsc.com.np/api/meroShareView/myDetail/{self.__dmat}"
+                    ).json()
+
+                    self.__account = account_details.get("accountNumber")
 
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
     def logout(self):
