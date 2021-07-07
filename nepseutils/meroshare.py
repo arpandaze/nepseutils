@@ -292,6 +292,7 @@ class MeroShare:
 
                 self.__applicable_issues = issue_req.json().get("object")
                 logging.info(f"Appplicable Issues Obtained! Account: {self.__name}")
+                return self.__applicable_issues
         except Exception as error:
             logging.info(error)
             logging.info("Retrying!")
@@ -517,8 +518,10 @@ class MeroShare:
 
             logging.info(f"Sucessfully applied! Account: {self.__name}")
 
-    def check_result(self, company_id: str):
-        return MeroShare.check_result_with_dmat(company_id, self.__dmat)
+    def check_result(self, company: str):
+        res = MeroShare.check_result_with_dmat(company, self.__dmat)
+        if res:
+            logging.info(f"Result: {res.get('message')} for {self.__name}")
 
     def get_edis_history(self):
         try:
@@ -606,9 +609,42 @@ class MeroShare:
 
     @staticmethod
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
-    def check_result_with_dmat(company_id: str, dmat: str):
+    def check_result_with_dmat(company: str, dmat: str):
         with requests.Session() as sess:
-            data = json.dumps({"boid": dmat, "companyShareId": company_id})
+            headers = {
+                "Connection": "keep-alive",
+                "Pragma": "no-cache",
+                "Cache-Control": "no-cache",
+                "Accept": "application/json, text/plain, */*",
+                "Authorization": "null",
+                "Sec-GPC": "1",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Dest": "empty",
+                "Referer": "https://iporesult.cdsc.com.np/",
+                "Accept-Language": "en-US,en;q=0.9",
+                "User-Agent": USER_AGENT,
+            }
+
+            response = sess.get(
+                "https://iporesult.cdsc.com.np/result/companyShares/fileUploaded",
+                headers=headers,
+            )
+
+            result_company_list = response.json().get("body")
+
+            company_id = [
+                item.get("id")
+                for item in result_company_list
+                if item.get("scrip") == company
+            ]
+            company_id = company_id[0] if company_id else None
+
+            if not company_id:
+                logging.error(msg=f"Result of {company} not found!")
+                return None
+
+            data = json.dumps({"boid": dmat, "companyShareId": str(company_id)})
             headers = {
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "en-US,en;q=0.9",
