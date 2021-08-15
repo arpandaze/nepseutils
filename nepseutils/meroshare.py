@@ -1,134 +1,129 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import json
 import logging
-import os
 from typing import Optional
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.105 Safari/537.36"  # noqa
-
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
+
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36"  # noqa
+
+MS_API_BASE = "https://webbackend.cdsc.com.np/api"
+
+BASE_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Connection": "keep-alive",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Origin": "https://meroshare.cdsc.com.np",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+    "Sec-GPC": "1",
+}
 
 
 class MeroShare:
     def __init__(
         self,
+        dmat: str,
+        password: str,
+        pin: int,
+        username: Optional[int] = None,
         name: Optional[str] = None,
-        dpid: int = None,
-        username: int = None,
-        password: str = None,
-        pin: int = None,
+        dpid: Optional[str] = None,
         crn: Optional[str] = None,
         account: Optional[str] = None,
-        dmat: Optional[int] = None,
         capital_id: Optional[int] = None,
+        branch_id: Optional[str] = None,
+        customer_id: Optional[str] = None,
+        bank_id: Optional[str] = None,
+        capitals: Optional[dict] = None,
     ):
-
         self.__name = name
-        self.__dpid = str(dpid)
-        self.__username = str(username)
+        self.__dpid = dpid
+        self.__username = username
         self.__password = password
         self.__account = account
-        self.__dmat = str(dmat)
+        self.__dmat = dmat
         self.__crn = crn
-        self.__pin = str(pin)
-        self.__capital_id = str(capital_id)
-        self.__capitals = {}
+        self.__pin = pin
+        self.__capital_id = capital_id
+        self.__capitals = capitals
         self.__session = requests.Session()
         self.__auth_token = None
         self.__applicable_issues = {}
+        self.__branch_id = branch_id
+        self.__customer_id = customer_id
+        self.__bank_id = bank_id
 
-        if os.path.isfile("active.token"):
-            with open("active.token") as token_file:
-                self.__auth_token = token_file.read()
-                self.logout()
+        self.__load_default_headers()
 
-        try:
-            with open("capitals.json", "r") as capitals_file:
-                self.__capitals = json.load(capitals_file)
-        except Exception:
-            pass
+        if not self.__dpid:
+            self.__dpid = self.__dmat[3:8]
 
-        if not self.__capitals:
-            self._update_capital_list()
+        if not self.__username:
+            self.__username = self.__dmat[-8:]
 
-        if not capital_id:
-            self.__capital_id = self.__capitals.get(dpid)
+        if not self.__capital_id:
+            if not self.__capitals:
+                self.__capitals = self.get_capital_list()
+
+            self.__capital_id = self.__capitals.get(self.__dpid)
+
             assert self.__capital_id, "DPID not on capital list!"
 
+        self.get_details()
+
+    def __load_default_headers(self):
+        self.__session.headers = BASE_HEADERS
+
+    @staticmethod
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2), reraise=True)
-    def _update_capital_list(self) -> bool:
-        logging.info("Updating capital list!")
-        with self.__session as sess:
+    def get_capital_list() -> dict:
+        capitals = {}
+        with requests.Session() as sess:
+            sess.headers = BASE_HEADERS
             headers = {
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "en-US,en;q=0.9",
                 "Authorization": "null",
-                "Connection": "keep-alive",
-                "Origin": "https://meroshare.cdsc.com.np",
-                "Referer": "https://meroshare.cdsc.com.np/",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-site",
-                "Sec-GPC": "1",
-                "User-Agent": USER_AGENT,
             }
             sess.headers.update(headers)
             cap_req = sess.get("https://backend.cdsc.com.np/api/meroShare/capital/")
             cap_list = cap_req.json()
+
             any(
                 map(
-                    lambda x: self.__capitals.update({x.get("code"): x.get("id")}),
+                    lambda x: capitals.update({x.get("code"): x.get("id")}),
                     cap_list,
                 )
             )
 
-            assert self.__capitals, "Capital request failed!"
-
-            with open("capitals.json", "w") as cap_file:
-                json.dump(self.__capitals, cap_file)
-
-            return True
+        return capitals
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(3), reraise=True)
-    def login(self) -> bool:
+    def login(self) -> str:
         assert (
             self.__username and self.__password and self.__dpid
         ), "Username, password and DPID required!"
 
         try:
             with self.__session as sess:
-                data = json.dumps(
-                    {
-                        "clientId": self.__capital_id,
-                        "username": self.__username,
-                        "password": self.__password,
-                    }
-                )
+                data = {
+                    "clientId": str(self.__capital_id),
+                    "username": self.__username,
+                    "password": self.__password,
+                }
 
                 headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
                     "Authorization": "null",
-                    "Connection": "keep-alive",
                     "Content-Type": "application/json",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
                 }
                 sess.headers.update(headers)
 
-                login_req = sess.post(
-                    "https://backend.cdsc.com.np/api/meroShare/auth/", data=data
-                )
+                login_req = sess.post(f"{MS_API_BASE}/meroShare/auth/", json=data)
 
                 if login_req.status_code != 200:
                     logging.warning(f"Login failed! {login_req.status_code}")
@@ -136,79 +131,90 @@ class MeroShare:
 
                 self.__auth_token = login_req.headers.get("Authorization")
 
-                self._get_own_details()
-
-                with open("active.token", "w") as session_file:
-                    session_file.write(self.__auth_token)
-
-                logging.info(f"Logged in successfully!  Account: {self.__name}!")
+                return self.__auth_token
 
         except Exception as error:
             logging.info(error)
-            raise error
             logging.error(
                 f"Login request failed! Retrying ({self.login.retry.statistics.get('attempt_number')})!"
             )
+            raise error
 
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
-    def _get_own_details(self):
-        assert self.__auth_token, "Not logged in!"
-        if not (self.__dmat and self.__account and self.__name):
-            with self.__session as sess:
-                headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
-                }
-                sess.headers.update(headers)
+    def get_details(self) -> dict:
+        if not self.__auth_token:
+            self.login()
 
-                own_details = sess.get(
-                    "https://webbackend.cdsc.com.np/api/meroShare/ownDetail/"
+        with self.__session as sess:
+            headers = {
+                "Authorization": self.__auth_token,
+            }
+            sess.headers.update(headers)
+
+            if (not self.__account) or (not self.__crn) or (not self.__name):
+                account_details = sess.get(
+                    f"{MS_API_BASE}/meroShareView/myDetail/{self.__dmat}"
                 ).json()
 
-                if not self.__dmat:
-                    self.__dmat = own_details.get("demat")
-
                 if not self.__name:
-                    self.__name = own_details.get("name")
+                    self.__name = account_details.get("name")
 
                 if not self.__account:
-                    account_details = sess.get(
-                        f"https://webbackend.cdsc.com.np/api/meroShareView/myDetail/{self.__dmat}"
-                    ).json()
-
                     self.__account = account_details.get("accountNumber")
 
+                if not self.__crn:
+                    bank_code = account_details.get("bankCode")
+                    bank_req = sess.get(f"{MS_API_BASE}/bankRequest/{bank_code}").json()
+                    self.__crn = bank_req.get("crnNumber")
+
+            if not self.__bank_id:
+                bank_req = sess.get(
+                    f"{MS_API_BASE}/meroShare/bank/",
+                )
+                self.__bank_id = bank_req.json()[0].get("id")
+
+            if (not self.__branch_id) or (not self.__customer_id):
+                bank_specific_req = sess.get(
+                    f"{MS_API_BASE}/meroShare/bank/{self.__bank_id}"
+                )
+
+                bank_specific_response_json = bank_specific_req.json()
+
+                if not self.__branch_id:
+                    self.__branch_id = bank_specific_response_json.get(
+                        "accountBranchId"
+                    )
+
+                if not self.__customer_id:
+                    self.__customer_id = bank_specific_response_json.get("id")
+
+        return {
+            "dmat": self.__dmat,
+            "name": self.__name,
+            "account": self.__account,
+            "crn": self.__crn,
+            "branch_id": self.__branch_id,
+            "customer_id": self.__customer_id,
+            "bank_id": self.__bank_id,
+            "dpid": self.__dpid,
+            "username": self.__username,
+            "password": self.__password,
+            "pin": str(self.__pin),
+            "capital_id": self.__capital_id,
+        }
+
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
-    def logout(self):
+    def logout(self) -> bool:
         assert self.__auth_token, "Not logged in!"
 
         try:
             with self.__session as sess:
                 headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
                     "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
                 }
                 sess.headers.update(headers)
                 logout_req = sess.get(
-                    "https://webbackend.cdsc.com.np/api/meroShare/auth/logout/",
+                    f"{MS_API_BASE}/meroShare/auth/logout/",
                 )
 
                 if logout_req.status_code != 201:
@@ -217,9 +223,8 @@ class MeroShare:
                     raise Exception("Logout failed!")
 
                 self.__auth_token = None
-                os.remove("active.token")
-                logging.info(f"Logged out successfully!  Account: {self.__name}!")
                 return True
+
         except Exception as error:
             logging.error(
                 f"Logout request failed! Retrying ({self.logout.retry.statistics.get('attempt_number')})!"
@@ -228,210 +233,159 @@ class MeroShare:
             raise error
 
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
-    def get_applicable_issues(self):
+    def get_applicable_issues(self) -> list:
         try:
             with self.__session as sess:
-                data = json.dumps(
-                    {
-                        "filterFieldParams": [
-                            {
-                                "key": "companyIssue.companyISIN.script",
-                                "alias": "Scrip",
-                            },
-                            {
-                                "key": "companyIssue.companyISIN.company.name",
-                                "alias": "Company Name",
-                            },
-                            {
-                                "key": "companyIssue.assignedToClient.name",
-                                "value": "",
-                                "alias": "Issue Manager",
-                            },
-                        ],
-                        "page": 1,
-                        "size": 10,
-                        "searchRoleViewConstants": "VIEW_APPLICABLE_SHARE",
-                        "filterDateParams": [
-                            {
-                                "key": "minIssueOpenDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                            {
-                                "key": "maxIssueCloseDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                        ],
-                    }
-                )
+                data = {
+                    "filterFieldParams": [
+                        {
+                            "key": "companyIssue.companyISIN.script",
+                            "alias": "Scrip",
+                        },
+                        {
+                            "key": "companyIssue.companyISIN.company.name",
+                            "alias": "Company Name",
+                        },
+                        {
+                            "key": "companyIssue.assignedToClient.name",
+                            "value": "",
+                            "alias": "Issue Manager",
+                        },
+                    ],
+                    "page": 1,
+                    "size": 10,
+                    "searchRoleViewConstants": "VIEW_APPLICABLE_SHARE",
+                    "filterDateParams": [
+                        {
+                            "key": "minIssueOpenDate",
+                            "condition": "",
+                            "alias": "",
+                            "value": "",
+                        },
+                        {
+                            "key": "maxIssueCloseDate",
+                            "condition": "",
+                            "alias": "",
+                            "value": "",
+                        },
+                    ],
+                }
 
                 headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
                     "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
                     "Content-Type": "application/json",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
                 }
-                sess.headers.clear()
                 sess.headers.update(headers)
                 issue_req = sess.post(
-                    "https://webbackend.cdsc.com.np/api/meroShare/companyShare/applicableIssue/",
-                    data=data,
+                    f"{MS_API_BASE}/meroShare/companyShare/applicableIssue/",
+                    json=data,
                 )
                 assert issue_req.status_code == 200, "Applicable issues request failed!"
 
                 self.__applicable_issues = issue_req.json().get("object")
-                logging.info(f"Appplicable Issues Obtained! Account: {self.__name}")
                 return self.__applicable_issues
+
         except Exception as error:
             logging.info(error)
-            logging.info("Retrying!")
             raise error
 
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
-    def get_my_details(self):
-        try:
-            with self.__session as sess:
-                headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
-                }
-                sess.headers.update(headers)
+    def get_application_reports(self) -> list:
+        with self.__session as sess:
+            self.__load_default_headers()
+            headers = {
+                "Authorization": self.__auth_token,
+                "Content-Type": "application/json",
+            }
+            sess.headers.update(headers)
+            data = {
+                "filterFieldParams": [
+                    {
+                        "key": "companyShare.companyIssue.companyISIN.script",
+                        "alias": "Scrip",
+                    },
+                    {
+                        "key": "companyShare.companyIssue.companyISIN.company.name",
+                        "alias": "Company Name",
+                    },
+                ],
+                "page": 1,
+                "size": 200,
+                "searchRoleViewConstants": "VIEW_APPLICANT_FORM_COMPLETE",
+                "filterDateParams": [
+                    {
+                        "key": "appliedDate",
+                        "condition": "",
+                        "alias": "",
+                        "value": "",
+                    },
+                    {
+                        "key": "appliedDate",
+                        "condition": "",
+                        "alias": "",
+                        "value": "",
+                    },
+                ],
+            }
 
-                details_json = sess.get(
-                    f"https://webbackend.cdsc.com.np/api/meroShareView/myDetail/{self.__dmat}"
-                ).json()
-                self.__dmat = details_json.get("boid")
-                self.__account = details_json.get("accountNumber")
-                self.__name = details_json.get("name")
-                return json.dumps(details_json, indent=2)
-        except Exception:
-            logging.error(
-                f"Details request failed! Retrying ({self.get_details.retry.statistics.get('attempt_number')})!"
+            recent_applied_req = sess.post(
+                f"{MS_API_BASE}/meroShare/applicantForm/active/search/",
+                json=data,
             )
 
+            return recent_applied_req.json().get("object")
+
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
-    def get_application_status(self, share_id: str):
+    def get_application_status(
+        self, form_id: Optional[int] = None, share_id: Optional[int] = None
+    ) -> dict:
         with self.__session as sess:
-            try:
-                headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
-                    "Content-Type": "application/json",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
-                }
-                sess.headers.update(headers)
-                data = json.dumps(
-                    {
-                        "filterFieldParams": [
-                            {
-                                "key": "companyShare.companyIssue.companyISIN.script",
-                                "alias": "Scrip",
-                            },
-                            {
-                                "key": "companyShare.companyIssue.companyISIN.company.name",
-                                "alias": "Company Name",
-                            },
-                        ],
-                        "page": 1,
-                        "size": 200,
-                        "searchRoleViewConstants": "VIEW_APPLICANT_FORM_COMPLETE",
-                        "filterDateParams": [
-                            {
-                                "key": "appliedDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                            {
-                                "key": "appliedDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                        ],
-                    }
-                )
-
-                recent_applied_req = sess.post(
-                    "https://webbackend.cdsc.com.np/api/meroShare/applicantForm/active/search/",
-                    data=data,
-                )
-
-                recent_applied_response_json = recent_applied_req.json().get("object")
+            if not form_id:
+                recent_applied_response_json = self.get_application_reports()
 
                 target_issue = None
 
                 for issue in recent_applied_response_json:
-                    if issue.get("companyShareId") == int(share_id):
+                    if issue.get("companyShareId") == share_id:
                         target_issue = issue
+                        form_id = target_issue.get("applicantFormId")
+                        break
 
-                if not target_issue:
-                    logging.critical(
-                        "No issue with provided id found in recent application history!"
-                    )
-                    raise Exception("Issue not found!")
-
-                headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
-                }
-                sess.headers.update(headers)
-
-                details_req = sess.get(
-                    f"https://webbackend.cdsc.com.np/api/meroShare/applicantForm/report/detail/{target_issue.get('applicantFormId')}",
+            if not form_id:
+                logging.critical(
+                    "No issue with provided id found in recent application history!"
                 )
+                raise Exception("Issue not found!")
 
-                details_response_json = details_req.json()
-                logging.info(
-                    f"Status: {details_response_json.get('meroshareRemark')} for {self.__name}"
-                )
-                return details_response_json
+            self.__load_default_headers()
 
-            except Exception as error:
-                logging.warning(
-                    f"Application status request failed! Retrying ({self.get_application_status.retry.statistics.get('attempt_number')})"
-                )
-                logging.exception(error)
-                raise error
+            headers = {
+                "Authorization": self.__auth_token,
+            }
+            sess.headers.update(headers)
 
-    def apply(self, share_id: str, quantity: str):
+            details_req = sess.get(
+                f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{form_id}",
+            )
+
+            details_response_json = details_req.json()
+
+            return details_response_json
+
+    def apply(self, share_id: int, quantity: int) -> dict:
+        if not (
+            self.__dmat
+            and self.__account
+            and self.__customer_id
+            and self.__branch_id
+            and self.__crn
+            and self.__pin
+            and self.__bank_id
+        ):
+            self.get_details()
+
+        assert share_id and quantity, "Share ID and quantity must be provided!"
+
         with self.__session as sess:
             try:
                 issue_to_apply = None
@@ -450,158 +404,126 @@ class MeroShare:
                     raise Exception("No matching applicable issues!")
 
                 if issue_to_apply.get("action"):
-                    status = issue_to_apply.get("action")
-                    logging.warning("Couldn't apply for issue!")
-                    logging.warning(f"Issue Status: {status}")
-                    raise Exception("Issue has been already applied!")
+                    return {
+                        "status": "CREATED",
+                        "message": "Issue already applied!",
+                    }
+
+                self.__load_default_headers()
 
                 headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
                     "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
                     "Content-Type": "application/json",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
+                    "Pragma": "no-cache",
+                    "Cache-Control": "no-cache",
                 }
 
                 sess.headers.update(headers)
-                bank_req = sess.get(
-                    "https://webbackend.cdsc.com.np/api/meroShare/bank/",
-                )
-                bank_id = bank_req.json()[0].get("id")
 
-                bank_specific_req = sess.get(
-                    f"https://webbackend.cdsc.com.np/api/meroShare/bank/{bank_id}"
-                )
-
-                bank_specific_response_json = bank_specific_req.json()
-
-                branch_id = bank_specific_response_json.get("accountBranchId")
-                account_number = bank_specific_response_json.get("accountNumber")
-                customer_id = bank_specific_response_json.get("id")
-
-                data = json.dumps(
-                    {
-                        "demat": self.__dmat,
-                        "boid": self.__dmat[-8:],
-                        "accountNumber": account_number,
-                        "customerId": customer_id,
-                        "accountBranchId": branch_id,
-                        "appliedKitta": quantity,
-                        "crnNumber": self.__crn,
-                        "transactionPIN": self.__pin,
-                        "companyShareId": share_id,
-                        "bankId": bank_id,
-                    }
-                )
+                data = {
+                    "demat": self.__dmat,
+                    "boid": self.__dmat[-8:],
+                    "accountNumber": self.__account,
+                    "customerId": self.__customer_id,
+                    "accountBranchId": self.__branch_id,
+                    "appliedKitta": str(quantity),
+                    "crnNumber": self.__crn,
+                    "transactionPIN": self.__pin,
+                    "companyShareId": str(share_id),
+                    "bankId": self.__bank_id,
+                }
 
             except Exception as error:
-                logging.critical("Apply failed!")
                 logging.critical(error)
                 raise error
 
             apply_req = sess.post(
-                "https://webbackend.cdsc.com.np/api/meroShare/applicantForm/share/apply",
-                data=data,
+                f"{MS_API_BASE}/meroShare/applicantForm/share/apply",
+                json=data,
             )
 
             if apply_req.status_code != 201:
-                logging.warning("Apply failed!")
-                logging.warning(apply_req.content)
-                logging.warning(apply_req.status_code)
+                raise Exception(
+                    f"Apply failed! Status code: {apply_req.status_code}, Message: {apply_req.content}"
+                )
 
-            logging.info(f"Sucessfully applied! Account: {self.__name}")
+            return apply_req.json()
 
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
     def check_result(self, company: str):
-        res = MeroShare.check_result_with_dmat(company, self.__dmat)
-        if res:
-            logging.info(f"Result: {res.get('message')} for {self.__name}")
+        return MeroShare.check_result_with_dmat(company, self.__dmat)
 
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
     def get_edis_history(self):
         try:
             with self.__session as sess:
                 headers = {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
                     "Authorization": self.__auth_token,
-                    "Connection": "keep-alive",
-                    "Origin": "https://meroshare.cdsc.com.np",
-                    "Referer": "https://meroshare.cdsc.com.np/",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-site",
-                    "Sec-GPC": "1",
-                    "User-Agent": USER_AGENT,
                 }
                 sess.headers.update(headers)
-                data = json.dumps(
-                    {
-                        "filterFieldParams": [
-                            {
-                                "key": "requestStatus.name",
-                                "value": "",
-                                "alias": "Status",
-                            },
-                            {
-                                "key": "contractObligationMap.obligation.settleId",
-                                "alias": "Settlement Id",
-                            },
-                            {
-                                "key": "contractObligationMap.obligation.scriptCode",
-                                "alias": "Script",
-                            },
-                            {
-                                "key": "contractObligationMap.obligation.sellCmId",
-                                "alias": "CM ID",
-                                "condition": "': '",
-                            },
-                        ],
-                        "page": 1,
-                        "size": 200,
-                        "searchRoleViewConstants": "VIEW",
-                        "filterDateParams": [
-                            {
-                                "key": "contractObligationMap.obligation.settleDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                            {
-                                "key": "contractObligationMap.obligation.settleDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                            {
-                                "key": "requestedDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                            {
-                                "key": "requestedDate",
-                                "condition": "",
-                                "alias": "",
-                                "value": "",
-                            },
-                        ],
-                    }
-                )
+                data = {
+                    "filterFieldParams": [
+                        {
+                            "key": "requestStatus.name",
+                            "value": "",
+                            "alias": "Status",
+                        },
+                        {
+                            "key": "contractObligationMap.obligation.settleId",
+                            "alias": "Settlement Id",
+                        },
+                        {
+                            "key": "contractObligationMap.obligation.scriptCode",
+                            "alias": "Script",
+                        },
+                        {
+                            "key": "contractObligationMap.obligation.sellCmId",
+                            "alias": "CM ID",
+                            "condition": "': '",
+                        },
+                    ],
+                    "page": 1,
+                    "size": 200,
+                    "searchRoleViewConstants": "VIEW",
+                    "filterDateParams": [
+                        {
+                            "key": "contractObligationMap.obligation.settleDate",
+                            "condition": "",
+                            "alias": "",
+                            "value": "",
+                        },
+                        {
+                            "key": "contractObligationMap.obligation.settleDate",
+                            "condition": "",
+                            "alias": "",
+                            "value": "",
+                        },
+                        {
+                            "key": "requestedDate",
+                            "condition": "",
+                            "alias": "",
+                            "value": "",
+                        },
+                        {
+                            "key": "requestedDate",
+                            "condition": "",
+                            "alias": "",
+                            "value": "",
+                        },
+                    ],
+                }
 
                 details_json = sess.post(
-                    "https://webbackend.cdsc.com.np/api/EDIS/report/search/",
-                    data=data,
+                    f"{MS_API_BASE}/EDIS/report/search/",
+                    json=data,
                 ).json()
+
                 for item in details_json.get("object"):
                     logging.info(
                         f'Script: {item.get("contract").get("obligation").get("scriptCode")}, Status: {item.get("statusName")}, for account: {self.__name}'
                     )
+
+                return details_json.get("object")
         except Exception:
             logging.error(
                 f"Details request failed! Retrying ({self.get_details.retry.statistics.get('attempt_number')})!"
@@ -609,7 +531,7 @@ class MeroShare:
 
     @staticmethod
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
-    def check_result_with_dmat(company: str, dmat: str):
+    def get_result_company_list() -> list:
         with requests.Session() as sess:
             headers = {
                 "Connection": "keep-alive",
@@ -617,13 +539,13 @@ class MeroShare:
                 "Cache-Control": "no-cache",
                 "Accept": "application/json, text/plain, */*",
                 "Authorization": "null",
+                "User-Agent": USER_AGENT,
                 "Sec-GPC": "1",
                 "Sec-Fetch-Site": "same-origin",
                 "Sec-Fetch-Mode": "cors",
                 "Sec-Fetch-Dest": "empty",
                 "Referer": "https://iporesult.cdsc.com.np/",
                 "Accept-Language": "en-US,en;q=0.9",
-                "User-Agent": USER_AGENT,
             }
 
             response = sess.get(
@@ -631,36 +553,50 @@ class MeroShare:
                 headers=headers,
             )
 
+            assert response.status_code == 200
             result_company_list = response.json().get("body")
 
-            company_id = [
-                item.get("id")
-                for item in result_company_list
-                if item.get("scrip") == company
-            ]
-            company_id = company_id[0] if company_id else None
+            return result_company_list
+
+    @staticmethod
+    @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
+    def check_result_with_dmat(
+        dmat: str, company: Optional[str] = None, company_id: Optional[int] = None
+    ) -> dict:
+        with requests.Session() as sess:
+            if not company_id:
+                result_company_list = MeroShare.get_result_company_list()
+
+                company_id = [
+                    item.get("id")
+                    for item in result_company_list
+                    if item.get("scrip").lower() == company.lower()
+                ]
+                company_id = company_id[0] if company_id else None
 
             if not company_id:
                 logging.error(msg=f"Result of {company} not found!")
-                return None
+                raise Exception(f"Result of {company} not found!")
 
-            data = json.dumps({"boid": dmat, "companyShareId": str(company_id)})
+            data = {"boid": dmat, "companyShareId": str(company_id)}
             headers = {
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Authorization": "null",
                 "Connection": "keep-alive",
-                "Content-Type": "application/json",
-                "Origin": "https://iporesult.cdsc.com.np",
-                "Referer": "https://iporesult.cdsc.com.np/",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-origin",
-                "Sec-GPC": "1",
+                "Pragma": "no-cache",
+                "Cache-Control": "no-cache",
+                "Accept": "application/json, text/plain, */*",
+                "Authorization": "null",
                 "User-Agent": USER_AGENT,
+                "Content-Type": "application/json",
+                "Sec-GPC": "1",
+                "Origin": "https://iporesult.cdsc.com.np",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Dest": "empty",
+                "Referer": "https://iporesult.cdsc.com.np/",
+                "Accept-Language": "en-US,en;q=0.9",
             }
             sess.headers.update(headers)
             result_req = sess.post(
-                "https://iporesult.cdsc.com.np/result/result/check", data=data
+                "https://iporesult.cdsc.com.np/result/result/check", json=data
             )
             return result_req.json()
