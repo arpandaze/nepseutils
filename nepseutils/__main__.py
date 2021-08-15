@@ -82,7 +82,7 @@ class NepseUtils(Cmd):
             data.write(encrypted_data)
 
     def create_new_data(self):
-        password = input("Password to unlock NepseUtils: ")
+        password = getpass(prompt="Password to unlock NepseUtils: ")
 
         self.fernet_init(password)
 
