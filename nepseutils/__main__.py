@@ -98,6 +98,12 @@ class NepseUtils(Cmd):
         elif len(args) == 1 and args[0] == "":
             dmat = input("Enter DMAT: ")
             password = getpass(prompt="Enter Meroshare Password: ")
+
+            if len(password) < 8:
+                print("Password too short!")
+                print("Pasting password on windows is not recommended!")
+                return
+
             pin = input("Enter Meroshare PIN: ")
 
         else:
