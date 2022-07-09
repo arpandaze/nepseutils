@@ -21,7 +21,7 @@ logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 
 
 class NepseUtils(Cmd):
-    prompt = "NepseUtils > "
+    prompt = "(local) NepseUtils > "
     intro = "Welcome to NepseUtils! Type ? for help!"
 
     data_folder = Path.home() / ".nepseutils"
@@ -181,7 +181,9 @@ class NepseUtils(Cmd):
             print(tabulate(table, headers=headers, tablefmt="pretty"))
 
         elif args[0] == "results":
-            results = MeroShare.get_result_company_list()
+            results = (
+                MeroShare.get_result_company_list().get("body").get("companyShareList")
+            )
 
             headers = ["ID", "Scrip", "Name"]
             table = [
@@ -204,7 +206,9 @@ class NepseUtils(Cmd):
         table = []
         for account in self.data["accounts"]:
             result = MeroShare.check_result_with_dmat(
-                company_id=company_id, dmat=account.get("dmat")
+                account.get("dmat"),
+                self.data["azcaptcha_token"],
+                company_id=company_id,
             )
             table.append(
                 [
@@ -312,6 +316,15 @@ class NepseUtils(Cmd):
             self.save_data()
             print("Password changed successfully!")
             exit(0)
+
+    def do_azcaptcha(self, args):
+        args = args.split(" ")
+
+        if args[0] == "init":
+            token = getpass(prompt="Enter your AZCaptcha Token: ")
+            self.data["azcaptcha_token"] = token
+            self.save_data()
+            print("AZCaptcha token has been successfully added")
 
     def help_change(self):
         print("Options:")

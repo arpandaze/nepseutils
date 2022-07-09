@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import time
 from typing import Optional
 
 import requests
@@ -554,49 +555,108 @@ class MeroShare:
             )
 
             assert response.status_code == 200
-            result_company_list = response.json().get("body")
+            result_company_list = response.json()
 
             return result_company_list
 
     @staticmethod
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
     def check_result_with_dmat(
-        dmat: str, company: Optional[str] = None, company_id: Optional[int] = None
+        dmat,
+        azcaptcha_token,
+        company=None,
+        company_id=None,
     ) -> dict:
         with requests.Session() as sess:
-            if not company_id:
-                result_company_list = MeroShare.get_result_company_list()
+            while True:
+                unseparated_resp = MeroShare.get_result_company_list()
+                captcha_base64 = (
+                    unseparated_resp.get("body").get("captchaData").get("captcha")
+                )
+                identifier = (
+                    unseparated_resp.get("body")
+                    .get("captchaData")
+                    .get("captchaIdentifier")
+                )
+                result_company_list = unseparated_resp.get("body").get(
+                    "companyShareList"
+                )
 
-                company_id = [
-                    item.get("id")
-                    for item in result_company_list
-                    if item.get("scrip").lower() == company.lower()
-                ]
-                company_id = company_id[0] if company_id else None
+                if not company_id:
+                    company_id = [
+                        item.get("id")
+                        for item in result_company_list
+                        if item.get("scrip").lower() == company.lower()
+                    ]
 
-            if not company_id:
-                logging.error(msg=f"Result of {company} not found!")
-                raise Exception(f"Result of {company} not found!")
+                    company_id = company_id[0] if company_id else None
 
-            data = {"boid": dmat, "companyShareId": str(company_id)}
-            headers = {
-                "Connection": "keep-alive",
-                "Pragma": "no-cache",
-                "Cache-Control": "no-cache",
-                "Accept": "application/json, text/plain, */*",
-                "Authorization": "null",
-                "User-Agent": USER_AGENT,
-                "Content-Type": "application/json",
-                "Sec-GPC": "1",
-                "Origin": "https://iporesult.cdsc.com.np",
-                "Sec-Fetch-Site": "same-origin",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Dest": "empty",
-                "Referer": "https://iporesult.cdsc.com.np/",
-                "Accept-Language": "en-US,en;q=0.9",
-            }
-            sess.headers.update(headers)
-            result_req = sess.post(
-                "https://iporesult.cdsc.com.np/result/result/check", json=data
-            )
-            return result_req.json()
+                if not company_id:
+                    logging.error(msg=f"Result of {company} not found!")
+                    raise Exception(f"Result of {company} not found!")
+
+                url = "http://azcaptcha.com/in.php"
+
+                payload = {
+                    "key": azcaptcha_token,
+                    "method": "base64",
+                    "body": captcha_base64,
+                }
+
+                response = requests.post(url, data=payload)
+
+                assert response.text[:3] == "OK|"
+
+                cap_resp_id = response.text[3:]
+
+                url = "http://azcaptcha.com/res.php"
+
+                payload = {
+                    "key": azcaptcha_token,
+                    "id": cap_resp_id,
+                    "action": "get",
+                }
+
+                tries = 0
+                while True:
+                    time.sleep(1)
+                    response = requests.get(url, params=payload)
+                    if response.text[:3] == "OK|" or tries > 3:
+                        break
+                    tries += 1
+
+                captcha = response.text[3:]
+
+                data = {
+                    "boid": dmat,
+                    "companyShareId": str(company_id),
+                    "captchaIdentifier": identifier,
+                    "userCaptcha": captcha or "34256",
+                }
+
+                headers = {
+                    "Connection": "keep-alive",
+                    "Pragma": "no-cache",
+                    "Cache-Control": "no-cache",
+                    "Accept": "application/json, text/plain, */*",
+                    "Authorization": "null",
+                    "User-Agent": USER_AGENT,
+                    "Content-Type": "application/json",
+                    "Sec-GPC": "1",
+                    "Origin": "https://iporesult.cdsc.com.np",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Dest": "empty",
+                    "Referer": "https://iporesult.cdsc.com.np/",
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
+                sess.headers.update(headers)
+                result_req = sess.post(
+                    "https://iporesult.cdsc.com.np/result/result/check", json=data
+                )
+                logging.info(f"Result fetched for dmat {dmat}, {result_req.json()}")
+
+                if "Invalid Captcha" in result_req.json()["message"]:
+                    continue
+                else:
+                    return result_req.json()
