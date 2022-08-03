@@ -21,7 +21,7 @@ logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 
 
 class NepseUtils(Cmd):
-    prompt = "(local) NepseUtils > "
+    prompt = "NepseUtils > "
     intro = "Welcome to NepseUtils! Type ? for help!"
 
     data_folder = Path.home() / ".nepseutils"
@@ -92,8 +92,8 @@ class NepseUtils(Cmd):
     def do_add(self, args):
         args = args.split(" ")
 
-        if len(args) == 3:
-            dmat, password, pin = args
+        if len(args) == 4:
+            dmat, password, crn, pin = args
 
         elif len(args) == 1 and args[0] == "":
             dmat = input("Enter DMAT: ")
@@ -104,13 +104,14 @@ class NepseUtils(Cmd):
                 print("Pasting password on windows is not recommended!")
                 return
 
+            crn = input("Enter CRN Number: ")
             pin = input("Enter Meroshare PIN: ")
 
         else:
             print('Incorrect format. Type "help add" for help!')
             return
 
-        ms = MeroShare(dmat=dmat, password=password, pin=pin)
+        ms = MeroShare(dmat=dmat, password=password, crn=crn, pin=pin)
         details = ms.get_details()
         ms.logout()
 
@@ -125,7 +126,7 @@ class NepseUtils(Cmd):
 
     def help_add(self):
         print("Add a new account!")
-        print("Usage: add {dmat} {password} {pin}")
+        print("Usage: add {dmat} {password} {crn} {pin}")
 
     def do_remove(self, args):
         self.do_list(args="accounts")
