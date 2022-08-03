@@ -23,17 +23,18 @@ Collection of scripts to interact with NEPSE related sites.
 *Note: Some distros might default to python2 when both python2 and python3 are installed so you might need to enter python3 and pip3 instead of python and pip.*
 
 ## Commands:
-|  Command      |  Description                 |
-|---------------|------------------------------|
-|`add`          | Add an account               |
-|`remove`       | Remove an account            |
-|`change lock`  | Change unlock password       |
-|`list accounts`| Show list of accounts        |
-|`list results` | Show list of results         |
-|`apply`        | Apply open issues            |
-|`status`       | Check IPO application status |
-|`result`       | Check IPO result             |
-|`exit`         | Exit the shell               |
+|  Command       |  Description                 |
+|----------------|------------------------------|
+|`add`           | Add an account               |
+|`remove`        | Remove an account            |
+|`change lock`   | Change unlock password       |
+|`list accounts` | Show list of accounts        |
+|`list results`  | Show list of results         |
+|`azcaptcha init`| Add azcaptcha token          |
+|`apply`         | Apply open issues            |
+|`status`        | Check IPO application status |
+|`result`        | Check IPO result             |
+|`exit`          | Exit the shell               |
 
 ## Usage
 
@@ -46,12 +47,12 @@ python -m nepseutils
 ### Adding an account
 #### Command:
 ```
-add {16_digit_dmat_number} {meroshare_password} {meroshare_pin}
+add {16_digit_dmat_number} {meroshare_password} {meroshare_pin} {crn}
 ```
 *You don't need to enter other infos. It will be automatically obtained.*
 #### Example:
 ```
-NepseUtils > add 1234567891234567 myp@ssw0rd 1234
+NepseUtils > add 1234567891234567 myp@ssw0rd 1234 02-R00222224
 ```
 #### Sample Output:
 ```
@@ -83,6 +84,7 @@ Units to Apply:
 Enter number of units (Not rupees) that you want to apply. This will apply IPO for all the added accounts.
 
 ### Checking IPO Result
+*Note: MeroShare has added a captcha for checking result. AZCaptcha token is needed for automatically solving captchas. Add token with `azcaptcha init`!*
 #### Command:
 ```
 result
