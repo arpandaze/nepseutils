@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nepseutils"
-version = "0.2.2"
+version = "0.3.0"
 description = "Collection of scripts to interact with NEPSE related websites!"
 authors = ["Daze <dazehere@yandex.com>"]
 repository = "https://github.com/arpandaze/nepseutils"
