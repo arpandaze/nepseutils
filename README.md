@@ -47,12 +47,12 @@ python -m nepseutils
 ### Adding an account
 #### Command:
 ```
-add {16_digit_dmat_number} {meroshare_password} {meroshare_pin} {crn}
+add {16_digit_dmat_number} {meroshare_password} {crn} {meroshare_pin}
 ```
 *You don't need to enter other infos. It will be automatically obtained.*
 #### Example:
 ```
-NepseUtils > add 1234567891234567 myp@ssw0rd 1234 02-R00222224
+NepseUtils > add 1234567891234567 myp@ssw0rd 02-R00222224 1234 
 ```
 #### Sample Output:
 ```
