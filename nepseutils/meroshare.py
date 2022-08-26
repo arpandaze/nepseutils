@@ -10,7 +10,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36"  # noqa
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36 Edg/104.0.1293.70"
 
 MS_API_BASE = "https://webbackend.cdsc.com.np/api"
 
@@ -152,7 +152,7 @@ class MeroShare:
             }
             sess.headers.update(headers)
 
-            if (not self.__account) or (not self.__crn) or (not self.__name):
+            if (not self.__account) or (not self.__name):
                 account_details = sess.get(
                     f"{MS_API_BASE}/meroShareView/myDetail/{self.__dmat}"
                 ).json()
@@ -161,12 +161,10 @@ class MeroShare:
                     self.__name = account_details.get("name")
 
                 if not self.__account:
-                    self.__account = account_details.get("accountNumber")
-
-                if not self.__crn:
                     bank_code = account_details.get("bankCode")
                     bank_req = sess.get(f"{MS_API_BASE}/bankRequest/{bank_code}").json()
-                    self.__crn = bank_req.get("crnNumber")
+                    self.__account = bank_req.get("accountNumber")
+
 
             if not self.__bank_id:
                 bank_req = sess.get(
@@ -442,7 +440,6 @@ class MeroShare:
                 f"{MS_API_BASE}/meroShare/applicantForm/share/apply",
                 json=data,
             )
-
             if apply_req.status_code != 201:
                 raise Exception(
                     f"Apply failed! Status code: {apply_req.status_code}, Message: {apply_req.content}"
