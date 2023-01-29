@@ -318,6 +318,21 @@ class NepseUtils(Cmd):
             print("Password changed successfully!")
             exit(0)
 
+        elif args[0] == "password":
+            self.do_list(args="accounts")
+            account_id = input("Choose an account ID: ")
+            account = self.data["accounts"][int(account_id) - 1]
+
+            new_password = getpass(prompt=f'Enter new password for account {account.get("name")}: ')
+
+            if len(new_password) < 8:
+                print("Password too short!")
+                print("Pasting password on windows is not recommended!")
+                return
+
+            self.data["accounts"][int(account_id) - 1]["password"] = new_password
+            self.save_data()
+
     def do_azcaptcha(self, args):
         args = args.split(" ")
 
