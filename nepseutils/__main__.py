@@ -239,12 +239,14 @@ class NepseUtils(Cmd):
 
             if not company_to_apply:
                 appicable_issues = ms.get_applicable_issues()
-                headers = ["Share ID", "Company Name", "Scrip", "Close Date"]
+                headers = ["Share ID", "Company Name", "Scrip", "Type", "Group","Close Date"]
                 table = [
                     [
                         itm.get("companyShareId"),
                         itm.get("companyName"),
                         itm.get("scrip"),
+                        itm.get("shareTypeName"),
+                        itm.get("shareGroupName"),
                         itm.get("issueCloseDate"),
                     ]
                     for itm in appicable_issues
