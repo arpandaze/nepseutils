@@ -239,12 +239,14 @@ class NepseUtils(Cmd):
 
             if not company_to_apply:
                 appicable_issues = ms.get_applicable_issues()
-                headers = ["Share ID", "Company Name", "Scrip", "Close Date"]
+                headers = ["Share ID", "Company Name", "Scrip", "Type", "Group","Close Date"]
                 table = [
                     [
                         itm.get("companyShareId"),
                         itm.get("companyName"),
                         itm.get("scrip"),
+                        itm.get("shareTypeName"),
+                        itm.get("shareGroupName"),
                         itm.get("issueCloseDate"),
                     ]
                     for itm in appicable_issues
@@ -252,8 +254,19 @@ class NepseUtils(Cmd):
                 print(tabulate(table, headers=headers, tablefmt="pretty"))
                 company_to_apply = input("Enter Share ID: ")
                 quantity = input("Units to Apply: ")
-            result = ms.apply(share_id=company_to_apply, quantity=quantity)
-            ms.logout()
+
+            try:
+                result = ms.apply(share_id=company_to_apply, quantity=quantity)
+            except Exception as e:
+                print(e)
+                print(f"Failed to apply for {account.get('name')}!")
+                result = {"status": "FAILED", "message": "Failed to apply!"}
+
+            try:
+                ms.logout()
+            except:
+                print(f"Failed to logout for {account.get('name')}!")
+
             apply_table.append(
                 [
                     account.get("name"),
