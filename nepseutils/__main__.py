@@ -254,8 +254,19 @@ class NepseUtils(Cmd):
                 print(tabulate(table, headers=headers, tablefmt="pretty"))
                 company_to_apply = input("Enter Share ID: ")
                 quantity = input("Units to Apply: ")
-            result = ms.apply(share_id=company_to_apply, quantity=quantity)
-            ms.logout()
+
+            try:
+                result = ms.apply(share_id=company_to_apply, quantity=quantity)
+            except Exception as e:
+                print(e)
+                print(f"Failed to apply for {account.get('name')}!")
+                result = {"status": "FAILED", "message": "Failed to apply!"}
+
+            try:
+                ms.logout()
+            except:
+                print(f"Failed to logout for {account.get('name')}!")
+
             apply_table.append(
                 [
                     account.get("name"),
