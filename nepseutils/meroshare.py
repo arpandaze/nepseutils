@@ -126,9 +126,23 @@ class MeroShare:
 
                 login_req = sess.post(f"{MS_API_BASE}/meroShare/auth/", json=data)
 
+                response_data = login_req.json()
+
                 if login_req.status_code != 200:
                     logging.warning(f"Login failed! {login_req.status_code}")
                     raise Exception("Login failed!")
+
+                if response_data.get("passwordExpired"):
+                    logging.error(f"Password has expired for user: {self.__name}")
+                    raise Exception(f"Password has expired for user: {self.__name}")
+
+                if response_data.get("accountExpired"):
+                    logging.error(f"Account has expired for user: {self.__name}")
+                    raise Exception(f"Account has expired for user: {self.__name}")
+
+                if response_data.get("dematExpired"):
+                    logging.error(f"DMAT has expired for user: {self.__name}")
+                    raise Exception(f"DMAT has expired for user: {self.__name}")
 
                 self.__auth_token = login_req.headers.get("Authorization")
 
@@ -137,7 +151,7 @@ class MeroShare:
         except Exception as error:
             logging.info(error)
             logging.error(
-                f"Login request failed! Retrying ({self.login.retry.statistics.get('attempt_number')})!"
+                f"Login request failed for user: {self.__name}! Retrying ({self.login.retry.statistics.get('attempt_number')})!"
             )
             raise error
 
@@ -164,7 +178,6 @@ class MeroShare:
                     bank_code = account_details.get("bankCode")
                     bank_req = sess.get(f"{MS_API_BASE}/bankRequest/{bank_code}").json()
                     self.__account = bank_req.get("accountNumber")
-
 
             if not self.__bank_id:
                 bank_req = sess.get(
@@ -279,7 +292,12 @@ class MeroShare:
                     f"{MS_API_BASE}/meroShare/companyShare/applicableIssue/",
                     json=data,
                 )
-                assert issue_req.status_code == 200, "Applicable issues request failed!"
+
+                if issue_req.status_code != 200:
+                    print(f"Response: {issue_req.json()}")
+                    raise Exception(
+                        f"Applicable issues request failed for user: {self.__name}!"
+                    )
 
                 self.__applicable_issues = issue_req.json().get("object")
                 return self.__applicable_issues
