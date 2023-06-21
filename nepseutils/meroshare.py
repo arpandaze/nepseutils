@@ -92,7 +92,7 @@ class MeroShare:
                 "Authorization": "null",
             }
             sess.headers.update(headers)
-            cap_req = sess.get("https://backend.cdsc.com.np/api/meroShare/capital/")
+            cap_req = sess.get(f"{MS_API_BASE}/meroShare/capital/")
             cap_list = cap_req.json()
 
             any(
