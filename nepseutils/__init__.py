@@ -1,3 +1,3 @@
 from nepseutils.meroshare import MeroShare
 
-__version__ = "0.3.6"
+from .version import __version__

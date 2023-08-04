@@ -9,11 +9,17 @@ import re
 from cmd import Cmd
 from getpass import getpass
 from pathlib import Path
+from typing import List
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from tabulate import tabulate
+from tabulate import SEPARATING_LINE, tabulate
+
+from nepseutils.account import Account
+from nepseutils.errors import LocalException
+from nepseutils.portfolio import PortfolioEntry
+from nepseutils import config_converter
 
 from .meroshare import MeroShare
 
@@ -24,70 +30,28 @@ class NepseUtils(Cmd):
     prompt = "NepseUtils > "
     intro = "Welcome to NepseUtils! Type ? for help!"
 
-    data_folder = Path.home() / ".nepseutils"
-
-    default_data = {
-        "accounts": [],
-        "capitals": {},
-        "max_retry": 5,
-        "retry_delay": 3,
-    }
+    ms: MeroShare
 
     def preloop(self, *args, **kwargs):
+        if not (MeroShare.default_config_path()).exists():
+            config_converter.pre_versioning_to_current()
 
-        if not (self.data_folder / "data.db").exists():
             logging.info("Creating a new data file! Existing file not found!")
 
-            self.data_folder.mkdir(parents=True, exist_ok=True)
-            self.create_new_data()
+            MeroShare.default_config_directory().mkdir(parents=True, exist_ok=True)
+
+            password = getpass(prompt="Set a password to unlock: ")
+            self.ms = MeroShare.new(password)
 
         else:
             password = getpass(prompt="Enter password to unlock: ")
-            self.fernet_init(password)
-            self.load_data()
 
-    def load_data(self):
-        with open(self.data_folder / "data.db", "rb") as data:
-            encrypted_data = data.read()
             try:
-                self.data = json.loads(
-                    self.fernet.decrypt(encrypted_data).decode("UTF-8")
-                )
-            except InvalidToken:
-                print("Password Incorrect!")
+                self.ms = MeroShare.load(password)
+            except InvalidToken as e:
+                print("Incorrect password!")
+                print(e)
                 exit()
-
-        if not self.data["capitals"]:
-            self.update_capital_list()
-
-    def fernet_init(self, password):
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=password.encode("UTF-8"),
-            iterations=100000,
-        )
-        key = base64.urlsafe_b64encode(kdf.derive(password.encode("UTF-8")))
-        self.fernet = Fernet(key)
-
-    def update_capital_list(self):
-        logging.info("Updating capital list!")
-        capital_list = MeroShare.get_capital_list()
-        self.data["capitals"].update(capital_list)
-        self.save_data()
-
-    def save_data(self):
-        with open(self.data_folder / "data.db", "wb") as data:
-            encrypted_data = self.fernet.encrypt(json.dumps(self.data).encode())
-            data.write(encrypted_data)
-
-    def create_new_data(self):
-        password = getpass(prompt="Password to unlock NepseUtils: ")
-
-        self.fernet_init(password)
-
-        self.data = self.default_data.copy()
-        self.update_capital_list()
 
     def do_add(self, args):
         args = args.split(" ")
@@ -111,18 +75,30 @@ class NepseUtils(Cmd):
             print('Incorrect format. Type "help add" for help!')
             return
 
-        ms = MeroShare(dmat=dmat, password=password, crn=crn, pin=pin)
-        details = ms.get_details()
-        ms.logout()
+        capital_id = self.ms.capitals.get(dmat[3:8])
 
-        assert details, "Details request failed!"
+        if not capital_id:
+            print("Could not find capital ID for given DMAT!")
+            print("Updating capital list!")
+            self.ms.update_capital_list()
+            capital_id = self.ms.capitals.get(dmat[3:8])
 
-        self.data["accounts"].append(details)
-        self.save_data()
+        if not capital_id:
+            print("Could not find capital ID for given DMAT!")
+            print("Please enter capital ID manually!")
+            capital_id = input("Enter Capital ID: ")
 
-        logging.info(
-            f'Successfully obtained details for account: {details.get("name")}'
-        )
+        account = Account(dmat, password, int(pin), int(capital_id), crn)
+
+        try:
+            account.get_details()
+        except LocalException as e:
+            print(f"Failed to obtain details for account: {e}")
+
+        self.ms.accounts.append(account)
+        self.ms.save_data()
+
+        logging.info(f"Successfully obtained details for account: {account.name}")
 
     def help_add(self):
         print("Add a new account!")
@@ -131,9 +107,112 @@ class NepseUtils(Cmd):
     def do_remove(self, args):
         self.do_list(args="accounts")
         account_id = input("Choose an account ID: ")
-        del self.data["accounts"][int(account_id) - 1]
-        self.save_data()
+        del self.ms.accounts[int(account_id) - 1]
+        self.ms.save_data()
         print("Account removed!")
+
+    def list_accounts_full(self):
+        print("WARNING: This will display password and pin of your accounts!")
+        confirm = input("Do you want to continue? (y/n) :")
+
+        if confirm == "y":
+            headers = ["ID", "Name", "DMAT", "Account", "CRN", "Password", "PIN"]
+            table = [
+                [
+                    self.ms.accounts.index(itm) + 1,
+                    itm.name,
+                    itm.dmat,
+                    itm.account,
+                    itm.crn,
+                    itm.password,
+                    itm.pin,
+                ]
+                for itm in self.ms.accounts
+            ]
+            print(tabulate(table, headers=headers, tablefmt="pretty"))
+
+    def list_accounts(self):
+        headers = ["ID", "Name", "DMAT", "Account", "CRN", "Tag"]
+        table = [
+            [
+                self.ms.accounts.index(itm) + 1,
+                itm.name,
+                itm.dmat,
+                itm.account,
+                itm.crn,
+                itm.tag,
+            ]
+            for itm in self.ms.accounts
+        ]
+        print(tabulate(table, headers=headers, tablefmt="pretty"))
+
+    def list_results(self):
+        results = self.ms.default_account.get_application_reports()
+        results = MeroShare.fetch_result_company_list()
+
+        headers = ["ID", "Scrip", "Name"]
+
+        print(f"{results}")
+        table = [[itm.get("id"), itm.get("scrip"), itm.get("name")] for itm in results]
+
+        print(tabulate(table, headers=headers, tablefmt="pretty"))
+        return results
+
+    def list_capitals(self):
+        headers = ["DPID", "ID"]
+        table = [[key, value] for key, value in self.ms.capitals.items()]
+        print(tabulate(table, headers=headers, tablefmt="pretty"))
+
+    def do_portfolio(self, args):
+        portfolio: List[PortfolioEntry] = []
+
+        if args == "all":
+            for account in self.ms.accounts:
+                if len(account.portfolio.entries) == 0:
+                    account.fetch_portfolio()
+
+                for entry in account.portfolio.entries:
+                    found = False
+
+                    for combined_entry in portfolio:
+                        if combined_entry.script == entry.script:
+                            combined_entry.current_balance += entry.current_balance
+                            combined_entry.value_as_of_last_transaction_price += (
+                                entry.value_as_of_last_transaction_price
+                            )
+                            found = True
+                            break
+
+                    if not found:
+                        portfolio.append(PortfolioEntry.from_json(entry.to_json()))
+
+        else:
+            self.list_accounts()
+            account_id = input("Choose an account ID: ")
+
+            account = self.ms.accounts[int(account_id) - 1]
+
+            if len(account.portfolio.entries) == 0:
+                account.fetch_portfolio()
+
+            portfolio = account.portfolio.entries
+
+        total_value = 0.0
+        for entry in portfolio:
+            total_value += entry.value_as_of_last_transaction_price
+
+        headers = ["Scrip", "Balance", "Last Transaction Price", "Value"]
+        table = [
+            [
+                itm.script,
+                itm.current_balance,
+                f"{itm.last_transaction_price:,.1f}",
+                f"{itm.value_as_of_last_transaction_price:,.1f}",
+            ]
+            for itm in portfolio
+        ]
+        table.append(["Total", "", "", f"{total_value:,.1f}"])
+        print(tabulate(table, headers=headers, tablefmt="pretty"))
 
     def do_list(self, args):
         args = args.split(" ")
@@ -143,133 +222,148 @@ class NepseUtils(Cmd):
             return
 
         if len(args) == 2 and args[0] == "accounts" and args[1] == "full":
-            print("WARNING: This will display password and pin of your accounts!")
-            confirm = input("Do you want to continue? (y/n) :")
-
-            if confirm == "y":
-                headers = ["ID", "Name", "DMAT", "Account", "CRN", "Password", "PIN"]
-                table = [
-                    [
-                        self.data["accounts"].index(itm) + 1,
-                        itm.get("name"),
-                        itm.get("dmat"),
-                        itm.get("account"),
-                        itm.get("crn"),
-                        itm.get("password"),
-                        itm.get("pin"),
-                    ]
-                    for itm in self.data["accounts"]
-                ]
-                print(tabulate(table, headers=headers, tablefmt="pretty"))
+            self.list_accounts_full()
 
         elif args[0] == "accounts":
-            headers = ["ID", "Name", "DMAT", "Account", "CRN"]
-            table = [
-                [
-                    self.data["accounts"].index(itm) + 1,
-                    itm.get("name"),
-                    itm.get("dmat"),
-                    itm.get("account"),
-                    itm.get("crn"),
-                ]
-                for itm in self.data["accounts"]
-            ]
-            print(tabulate(table, headers=headers, tablefmt="pretty"))
+            self.list_accounts()
 
         elif args[0] == "capitals":
-            headers = ["DPID", "ID"]
-            table = [[key, value] for key, value in self.data["capitals"].items()]
-            print(tabulate(table, headers=headers, tablefmt="pretty"))
+            self.list_capitals()
 
         elif args[0] == "results":
-            results = (
-                MeroShare.get_result_company_list().get("body").get("companyShareList")
-            )
-
-            headers = ["ID", "Scrip", "Name"]
-            table = [
-                [itm.get("id"), itm.get("scrip"), itm.get("name")] for itm in results
-            ]
-            print(tabulate(table, headers=headers, tablefmt="pretty"))
+            self.list_results()
 
     def help_list(self):
         print("Lists added accounts")
 
-    def do_result(self, args):
+    def do_select(self, args):
         if not args:
-            self.do_list(args="results")
+            print('Incorrect format. Type "help select" for help!')
+            return
+
+        args = args.split(" ")
+
+        if args == ["all"]:
+            self.ms.tag_selections = []
+            self.prompt = f"NepseUtils > "
+            return
+        else:
+            self.ms.tag_selections = args
+            self.prompt = f"NepseUtils ({','.join(self.ms.tag_selections)}) > "
+
+    def do_result(self, args):
+        results = []
+        if not args:
+            results = self.do_list(args="results")
             company_id = input("Choose a company ID: ")
         else:
             args = args.split(" ")
             company_id = args[0]
 
+        symbol = None
+        for company in results or []:
+            if company.get("id") == company_id:
+                symbol = company.get("scrip")
+                break
+
         headers = ["Name", "Alloted", "Quantity"]
         table = []
-        for account in self.data["accounts"]:
-            result = MeroShare.check_result_with_dmat(
-                account.get("dmat"),
-                self.data["azcaptcha_token"],
-                company_id=company_id,
-            )
+        for account in self.ms.accounts:
+            account.fetch_applied_issues()
+
+            issue_ins = None
+            for issue in account.issues:
+                if issue.symbol == symbol:
+                    issue_ins = issue
+                    break
+
+            if not issue_ins:
+                table.append([account.name, "N/A", "N/A"])
+                continue
+
             table.append(
                 [
-                    account.get("name"),
-                    result.get("success"),
-                    "None"
-                    if not result.get("success")
-                    else re.search("([0-9]+)", result.get("message")).group(0),
+                    account.name,
+                    issue_ins.alloted,
+                    "N/A" if not issue_ins.alloted else issue_ins.alloted_quantity,
                 ]
             )
         print(tabulate(table, headers=headers, tablefmt="pretty"))
+
+    def do_tag(self, args):
+        self.list_accounts()
+
+        input_account_id = input("Choose an account ID: ")
+
+        account = self.ms.accounts[int(input_account_id) - 1]
+
+        tag = input(f"Set tag for account {account.name}: ")
+
+        if tag == "" or tag == "all":
+            tag = None
+            print(f"Invalid tag {tag}. Setting to None")
+
+        account.tag = tag
+        self.ms.save_data()
 
     def help_result(self):
         print("Check results of IPO")
 
     def do_apply(self, args):
         company_to_apply = None
-        appicable_issues = None
         quantity = None
 
         apply_headers = ["Name", "Quantity", "Applied", "Message"]
         apply_table = []
 
-        for account in self.data["accounts"]:
-            ms = MeroShare(**account)
-            ms.login()
+        appicable_issues = self.ms.default_account.get_applicable_issues()
 
+        headers = [
+            "Share ID",
+            "Company Name",
+            "Scrip",
+            "Type",
+            "Group",
+            "Close Date",
+        ]
+
+        table = [
+            [
+                itm.get("companyShareId"),
+                itm.get("companyName"),
+                itm.get("scrip"),
+                itm.get("shareTypeName"),
+                itm.get("shareGroupName"),
+                itm.get("issueCloseDate"),
+            ]
+            for itm in appicable_issues
+        ]
+
+        print(tabulate(table, headers=headers, tablefmt="pretty"))
+        company_to_apply = input("Enter Share ID: ")
+        quantity = input("Units to Apply: ")
+
+        for account in self.ms.accounts:
             if not company_to_apply:
-                appicable_issues = ms.get_applicable_issues()
-                headers = ["Share ID", "Company Name", "Scrip", "Type", "Group","Close Date"]
-                table = [
-                    [
-                        itm.get("companyShareId"),
-                        itm.get("companyName"),
-                        itm.get("scrip"),
-                        itm.get("shareTypeName"),
-                        itm.get("shareGroupName"),
-                        itm.get("issueCloseDate"),
-                    ]
-                    for itm in appicable_issues
-                ]
-                print(tabulate(table, headers=headers, tablefmt="pretty"))
-                company_to_apply = input("Enter Share ID: ")
-                quantity = input("Units to Apply: ")
+                appicable_issues = account.get_applicable_issues()
 
             try:
-                result = ms.apply(share_id=company_to_apply, quantity=quantity)
+                result = account.apply(
+                    share_id=int(company_to_apply), quantity=int(quantity)
+                )
             except Exception as e:
                 print(e)
-                print(f"Failed to apply for {account.get('name')}!")
+                print(f"Failed to apply for {account.name}!")
                 result = {"status": "FAILED", "message": "Failed to apply!"}
 
             try:
-                ms.logout()
+                account.logout()
             except:
-                print(f"Failed to logout for {account.get('name')}!")
+                print(f"Failed to logout for {account.name}!")
 
             apply_table.append(
                 [
-                    account.get("name"),
+                    account.name,
                     quantity,
                     result.get("status") == "CREATED",
                     result.get("message"),
@@ -281,14 +375,15 @@ class NepseUtils(Cmd):
     def help_apply(self):
         print("Apply for shares")
 
+    def do_fetch(self, args):
+        pass
+
     def do_status(self, args):
         company_share_id = None
         status_headers = ["Name", "Status", "Detail"]
         status_table = []
-        for account in self.data["accounts"]:
-            ms = MeroShare(**account)
-            ms.login()
-            reports = ms.get_application_reports()
+        for account in self.ms.accounts:
+            reports = account.get_application_reports()
 
             if not company_share_id:
                 headers = ["Share ID", "Company Name", "Scrip"]
@@ -309,11 +404,11 @@ class NepseUtils(Cmd):
                 for itm in reports
                 if itm.get("companyShareId") == int(company_share_id)
             ][0]
-            detailed_form = ms.get_application_status(form_id=form_id)
-            ms.logout()
+            detailed_form = account.get_application_status(form_id=form_id)
+            account.logout()
             status_table.append(
                 [
-                    account.get("name"),
+                    account.name,
                     detailed_form.get("statusName"),
                     detailed_form.get("reasonOrRemark"),
                 ]
@@ -326,34 +421,30 @@ class NepseUtils(Cmd):
 
         if args[0] == "lock":
             password = getpass(prompt="Enter new password for NepseUtils: ")
-            self.fernet_init(password)
-            self.save_data()
+            self.ms.fernet_init(password)
+            self.ms.save_data()
             print("Password changed successfully!")
             exit(0)
 
         elif args[0] == "password":
             self.do_list(args="accounts")
             account_id = input("Choose an account ID: ")
-            account = self.data["accounts"][int(account_id) - 1]
+            account = self.ms.accounts[int(account_id) - 1]
 
-            new_password = getpass(prompt=f'Enter new password for account {account.get("name")}: ')
+            new_password = getpass(
+                prompt=f"Enter new password for account {account.name}: "
+            )
 
             if len(new_password) < 8:
                 print("Password too short!")
                 print("Pasting password on windows is not recommended!")
                 return
 
-            self.data["accounts"][int(account_id) - 1]["password"] = new_password
-            self.save_data()
+            self.ms.accounts[int(account_id) - 1].password = new_password
+            self.ms.save_data()
 
     def do_azcaptcha(self, args):
-        args = args.split(" ")
-
-        if args[0] == "init":
-            token = getpass(prompt="Enter your AZCaptcha Token: ")
-            self.data["azcaptcha_token"] = token
-            self.save_data()
-            print("AZCaptcha token has been successfully added")
+        logging.warning("This command is deprecated!")
 
     def help_change(self):
         print("Options:")
