@@ -1,29 +1,26 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import base64
-import json
+import argparse
+import asyncio
 import logging
 import os
-import re
 from cmd import Cmd
 from getpass import getpass
-from pathlib import Path
 from typing import List
 
-from cryptography.fernet import Fernet, InvalidToken
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from tabulate import SEPARATING_LINE, tabulate
+from cryptography.fernet import InvalidToken
+from tabulate import tabulate
 
-from nepseutils.account import Account
-from nepseutils.errors import LocalException
-from nepseutils.portfolio import PortfolioEntry
-from nepseutils import config_converter
+from nepseutils.utils import config_converter
+from nepseutils.core.account import Account
+from nepseutils.core.errors import LocalException
+from nepseutils.core.portfolio import PortfolioEntry
 
-from .meroshare import MeroShare
+from nepseutils.core.meroshare import MeroShare
 
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 
 class NepseUtils(Cmd):
@@ -147,13 +144,14 @@ class NepseUtils(Cmd):
         print(tabulate(table, headers=headers, tablefmt="pretty"))
 
     def list_results(self):
-        results = self.ms.default_account.get_application_reports()
-        results = MeroShare.fetch_result_company_list()
+        results = self.ms.default_account.fetch_application_reports()
 
         headers = ["ID", "Scrip", "Name"]
 
-        print(f"{results}")
-        table = [[itm.get("id"), itm.get("scrip"), itm.get("name")] for itm in results]
+        table = [
+            [itm.get("companyShareId"), itm.get("scrip"), itm.get("companyName")]
+            for itm in results
+        ]
 
         print(tabulate(table, headers=headers, tablefmt="pretty"))
         return results
@@ -222,16 +220,16 @@ class NepseUtils(Cmd):
             return
 
         if len(args) == 2 and args[0] == "accounts" and args[1] == "full":
-            self.list_accounts_full()
+            return self.list_accounts_full()
 
         elif args[0] == "accounts":
-            self.list_accounts()
+            return self.list_accounts()
 
         elif args[0] == "capitals":
-            self.list_capitals()
+            return self.list_capitals()
 
         elif args[0] == "results":
-            self.list_results()
+            return self.list_results()
 
     def help_list(self):
         print("Lists added accounts")
@@ -252,28 +250,21 @@ class NepseUtils(Cmd):
             self.prompt = f"NepseUtils ({','.join(self.ms.tag_selections)}) > "
 
     def do_result(self, args):
-        results = []
         if not args:
-            results = self.do_list(args="results")
+            self.do_list(args="results")
             company_id = input("Choose a company ID: ")
         else:
             args = args.split(" ")
             company_id = args[0]
 
-        symbol = None
-        for company in results or []:
-            if company.get("id") == company_id:
-                symbol = company.get("scrip")
-                break
-
         headers = ["Name", "Alloted", "Quantity"]
         table = []
         for account in self.ms.accounts:
-            account.fetch_applied_issues()
+            # account.fetch_applied_issues()
 
             issue_ins = None
             for issue in account.issues:
-                if issue.symbol == symbol:
+                if issue.company_share_id == int(company_id):
                     issue_ins = issue
                     break
 
@@ -316,7 +307,7 @@ class NepseUtils(Cmd):
         apply_headers = ["Name", "Quantity", "Applied", "Message"]
         apply_table = []
 
-        appicable_issues = self.ms.default_account.get_applicable_issues()
+        appicable_issues = self.ms.default_account.fetch_applicable_issues()
 
         headers = [
             "Share ID",
@@ -345,7 +336,7 @@ class NepseUtils(Cmd):
 
         for account in self.ms.accounts:
             if not company_to_apply:
-                appicable_issues = account.get_applicable_issues()
+                appicable_issues = account.fetch_applicable_issues()
 
             try:
                 result = account.apply(
@@ -375,15 +366,12 @@ class NepseUtils(Cmd):
     def help_apply(self):
         print("Apply for shares")
 
-    def do_fetch(self, args):
-        pass
-
     def do_status(self, args):
         company_share_id = None
         status_headers = ["Name", "Status", "Detail"]
         status_table = []
         for account in self.ms.accounts:
-            reports = account.get_application_reports()
+            reports = account.fetch_application_reports()
 
             if not company_share_id:
                 headers = ["Share ID", "Company Name", "Scrip"]
@@ -404,7 +392,7 @@ class NepseUtils(Cmd):
                 for itm in reports
                 if itm.get("companyShareId") == int(company_share_id)
             ][0]
-            detailed_form = account.get_application_status(form_id=form_id)
+            detailed_form = account.fetch_application_status(form_id=form_id)
             account.logout()
             status_table.append(
                 [
@@ -446,6 +434,24 @@ class NepseUtils(Cmd):
     def do_azcaptcha(self, args):
         logging.warning("This command is deprecated!")
 
+    def do_loglevel(self, args):
+        if args == "debug":
+            self.ms.logging_level = logging.DEBUG
+        elif args == "info":
+            self.ms.logging_level = logging.INFO
+        elif args == "warning":
+            self.ms.logging_level = logging.WARNING
+        elif args == "error":
+            self.ms.logging_level = logging.ERROR
+        elif args == "critical":
+            self.ms.logging_level = logging.CRITICAL
+        else:
+            print("Invalid argument!")
+
+        self.ms.save_data()
+        print(f"Logging level set to {args}! Restart NepseUtils!")
+        exit()
+
     def help_change(self):
         print("Options:")
         print("lock: Change nepseutils password")
@@ -460,8 +466,54 @@ class NepseUtils(Cmd):
     def do_clear(self, args):
         os.system("cls" if os.name == "nt" else "clear")
 
+    def do_telegram(self, args):
+        if args == "enable":
+            token = input("Enter telegram bot token: ")
+            chat_id = input("Enter telegram chat id: ")
+
+            if not token or not chat_id:
+                print("Invalid token or chat id!")
+                return
+
+            self.ms.telegram_bot_token = token
+            self.ms.telegram_chat_id = chat_id
+            self.ms.save_data()
+
+        elif args == "disable":
+            self.ms.telegram_bot_token = None
+            self.ms.telegram_chat_id = None
+            self.ms.save_data()
+
+        else:
+            print("Invalid argument!")
+
     def do_c(self, args):
         self.do_clear(args)
+
+    @staticmethod
+    def auto(password: str):
+        if not password:
+            print("Password not provided!")
+            return
+
+        ms: MeroShare = MeroShare.load(password)
+
+        applicable_issues = ms.default_account.fetch_applicable_issues()
+
+        for issue in applicable_issues:
+            if (
+                issue.get("shareTypeName") == "IPO"
+                and issue.get("shareGroupName") == "Ordinary Shares"
+            ):
+                for account in ms.accounts:
+                    try:
+                        print(f"{issue}")
+                        print(f"{account}")
+                        # result = account.apply(
+                        #     share_id=issue.get("companyShareId"), quantity=1
+                        # )
+                    except Exception as e:
+                        pass
 
     def default(self, inp):
         if inp == "x" or inp == "q" or inp == "EOF":
@@ -470,5 +522,21 @@ class NepseUtils(Cmd):
         print('Invalid command! Type "help" for help')
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Nepse Utility CLI")
+
+    parser.add_argument("--password", help="Password for auto_apply")
+    parser.add_argument(
+        "--auto_apply", action="store_true", help="Enable auto_apply mode"
+    )
+
+    args = parser.parse_args()
+
+    if args.auto_apply and args.password:
+        NepseUtils().auto(args.password)
+    else:
+        NepseUtils().cmdloop()
+
+
 if __name__ == "__main__":
-    NepseUtils().cmdloop()
+    main()

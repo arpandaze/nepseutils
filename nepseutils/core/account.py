@@ -9,26 +9,14 @@ from tenacity.wait import wait_fixed
 from tenacity.retry import retry_if_exception_type
 
 from nepseutils.constants import MS_API_BASE
-from nepseutils.errors import GlobalError, LocalException
-from nepseutils.issue import Issue
-from nepseutils.portfolio import Portfolio, PortfolioEntry
-
-
-def login_required(func):
-    """
-    Decorator to check if the user is logged in or not.
-    If not, login and then execute the function.
-    """
-
-    def wrapper(self, *args, **kwargs):
-        if not self.auth_token:
-            self.login()
-        return func(self, *args, **kwargs)
-
-    return wrapper
+from .errors import GlobalError, LocalException
+from .issue import Issue
+from .portfolio import Portfolio, PortfolioEntry
+from nepseutils.utils.decorators import login_required, autosave
 
 
 class Account:
+    save: Callable
     dmat: str
     password: str
     pin: int
@@ -70,7 +58,9 @@ class Account:
         tag: Optional[str] = None,
         save: Optional[Callable] = None,
         __auth_token: Optional[str] = None,
+        send_telegram_message: Callable = lambda *args, **kwargs: None,
     ):
+        self.send_telegram_message = send_telegram_message
         self.dmat = dmat
         self.password = password
         self.pin = pin
@@ -273,6 +263,7 @@ class Account:
             self.auth_token = None
             return True
 
+    @autosave
     @login_required
     @retry(
         stop=stop_after_attempt(3),
@@ -280,7 +271,7 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
-    def get_applicable_issues(self) -> list:
+    def fetch_applicable_issues(self) -> list:
         with self.__session as sess:
             data = {
                 "filterFieldParams": [
@@ -321,6 +312,9 @@ class Account:
                 "Content-Type": "application/json",
             }
             sess.headers.update(headers)
+
+            logging.info(f"Fetching applicable issues for user: {self.name}")
+
             issue_req = sess.post(
                 f"{MS_API_BASE}/meroShare/companyShare/applicableIssue/",
                 json=data,
@@ -336,6 +330,7 @@ class Account:
 
             return issue_req.json().get("object")
 
+    @autosave
     @login_required
     @retry(
         stop=stop_after_attempt(3),
@@ -343,7 +338,7 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
-    def get_application_reports(self, active=True) -> list:
+    def fetch_application_reports(self, active=True) -> list:
         with self.__session as sess:
             headers = {
                 "Content-Type": "application/json",
@@ -387,6 +382,7 @@ class Account:
                 ],
             }
 
+            logging.info(f"Fetching application reports for user: {self.name}")
             recent_applied_req = sess.post(
                 f"{MS_API_BASE}/{endpoint}",
                 json=data,
@@ -402,6 +398,7 @@ class Account:
 
             return recent_applied_req.json().get("object")
 
+    @autosave
     @login_required
     @retry(
         stop=stop_after_attempt(3),
@@ -410,7 +407,7 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def fetch_applied_issues(self, refetch=False) -> None:
-        application_reports = self.get_application_reports()
+        application_reports = self.fetch_application_reports()
 
         if refetch:
             self.issues = []
@@ -433,7 +430,7 @@ class Account:
                 )
             )
 
-        application_reports = self.get_application_reports(active=False)
+        application_reports = self.fetch_application_reports(active=False)
 
         for report in application_reports:
             # Skip if already exists and mark as old
@@ -514,12 +511,12 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
-    def get_application_status(
+    def fetch_application_status(
         self, form_id: Optional[int] = None, share_id: Optional[int] = None
     ) -> dict:
         with self.__session as sess:
             if not form_id:
-                recent_applied_response_json = self.get_application_reports()
+                recent_applied_response_json = self.fetch_application_reports()
 
                 target_issue = None
 
@@ -620,7 +617,7 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
-    def get_edis_history(self):
+    def fetch_edis_history(self):
         with self.__session as sess:
             data = {
                 "filterFieldParams": [
@@ -717,7 +714,7 @@ class Account:
         with self.__session as sess:
             issue_to_apply = None
 
-            applicable_issue = self.get_applicable_issues()
+            applicable_issue = self.fetch_applicable_issues()
 
             for issue in applicable_issue:
                 if issue.get("companyShareId") == share_id:
@@ -791,8 +788,9 @@ class Account:
         }
 
     @staticmethod
-    def from_json(json: dict):
+    def from_json(json: dict, save: Callable = lambda: None):
         return Account(
+            save=save,
             dmat=str(json.get("dmat")),
             password=str(json.get("password")),
             pin=int(json.get("pin") or 0),

@@ -1,16 +1,15 @@
 import base64
 from getpass import getpass
 import json
-import logging
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from nepseutils.account import Account
-from nepseutils.errors import LocalException
+from nepseutils.core.account import Account
+from nepseutils.core.errors import LocalException
 
-from nepseutils.meroshare import MeroShare
+from nepseutils.core.meroshare import MeroShare
 
 
 def pre_versioning_to_current():
