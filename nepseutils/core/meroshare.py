@@ -6,18 +6,19 @@ from pathlib import Path
 from typing import List, Optional
 
 import requests
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from tenacity import retry
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_fixed
 
-from nepseutils.account import Account
+from nepseutils.core.account import Account
 from nepseutils.constants import BASE_HEADERS, MS_API_BASE
-from nepseutils.errors import LocalException
+from nepseutils.core.errors import LocalException
+from nepseutils.utils.logging import TelegramLoggingHandler
 
-from .version import __version__
+from nepseutils.version import __version__
 
 DEFAULT_CONFIG_FILENAME = "config.json"
 
@@ -29,6 +30,8 @@ class MeroShare:
     capitals: dict
     config_version: str
     logging_level: int
+    telegram_bot_token: str | None
+    telegram_chat_id: str | None
 
     config_path: Path
     fernet: Fernet
@@ -52,11 +55,30 @@ class MeroShare:
         config_version: str = __version__,
         logging_level: int = logging.ERROR,
         config_path: Optional[Path] = None,
+        telegram_bot_token: str | None = None,
+        telegram_chat_id: str | None = None,
     ):
         self.logging_level = logging_level
         self.config_version = config_version
 
-        logging.basicConfig(format="%(asctime)s %(message)s", level=self.logging_level)
+        self.telegram_bot_token = telegram_bot_token
+        self.telegram_chat_id = telegram_chat_id
+
+        if telegram_bot_token and telegram_chat_id:
+            logging.basicConfig(
+                format="%(asctime)s %(message)s",
+                level=self.logging_level,
+                force=True,
+                handlers=[TelegramLoggingHandler(telegram_bot_token, telegram_chat_id)],
+            )
+        else:
+            logging.basicConfig(
+                filename=f"{MeroShare.default_config_directory()}/nepseutils.log",
+                filemode="a",
+                format="%(asctime)s %(message)s",
+                level=self.logging_level,
+                force=True,
+            )
 
         self._accounts = accounts or []
         self.tag_selections = []
@@ -149,6 +171,8 @@ class MeroShare:
 
             config_version = config.get("config_version")
             logging_level = config.get("logging_level")
+            telegram_bot_token = config.get("telegram_bot_token")
+            telegram_chat_id = config.get("telegram_chat_id")
             capitals = config.get("capitals")
 
             fernet = MeroShare.fernet_init(password)
@@ -156,18 +180,24 @@ class MeroShare:
             encrypted_bytes = base64.b64decode(config.get("data"))
             decrypted_data = fernet.decrypt(encrypted_bytes)
             accounts = json.loads(decrypted_data)
-            logging.info(accounts)
 
-            accounts = [Account.from_json(account) for account in accounts]
-
-            return MeroShare(
+            ms = MeroShare(
                 fernet=fernet,
-                accounts=accounts,
+                accounts=[],
                 capitals=capitals,
                 config_version=config_version,
                 logging_level=logging_level,
                 config_path=path,
+                telegram_bot_token=telegram_bot_token,
+                telegram_chat_id=telegram_chat_id,
             )
+            accounts = [
+                Account.from_json(account, ms.save_data) for account in accounts
+            ]
+
+            ms._accounts = accounts
+
+            return ms
 
     def save_data(self):
         logging.info("Saving data!")
@@ -180,6 +210,8 @@ class MeroShare:
                     {
                         "config_version": self.config_version,
                         "logging_level": self.logging_level,
+                        "telegram_bot_token": self.telegram_bot_token,
+                        "telegram_chat_id": self.telegram_chat_id,
                         "capitals": self.capitals,
                         "data": base64.b64encode(encrypted_data).decode(),
                     }
@@ -190,22 +222,6 @@ class MeroShare:
         logging.info("Did not find any data file, creating new data!")
         self.fernet_init(password)
         self.update_capital_list()
-
-    # def load_data(self):
-    #     logging.info("Loading data!")
-    #     with open(self.config_path, "rb") as data:
-    #         encrypted_data = data.read()
-    #         try:
-    #             logging.info("Decrypting data!")
-    #             decrypted_data = self.fernet.decrypt(encrypted_data)
-    #             self.data = json.loads(decrypted_data)
-    #
-    #         except InvalidToken:
-    #             logging.info("Password Incorrect!")
-    #             exit()
-    #
-    #     if not self.data["capitals"]:
-    #         self.update_capital_list()
 
     @property
     def default_account(self) -> Account:
