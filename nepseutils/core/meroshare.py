@@ -72,6 +72,8 @@ class MeroShare:
                 handlers=[TelegramLoggingHandler(telegram_bot_token, telegram_chat_id)],
             )
         else:
+            if not os.path.exists(MeroShare.default_config_directory()):
+                os.makedirs(MeroShare.default_config_directory())
             logging.basicConfig(
                 filename=f"{MeroShare.default_config_directory()}/nepseutils.log",
                 filemode="a",
