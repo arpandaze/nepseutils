@@ -12,12 +12,12 @@ from typing import List
 from cryptography.fernet import InvalidToken
 from tabulate import tabulate
 
-from nepseutils.utils import config_converter
 from nepseutils.core.account import Account
 from nepseutils.core.errors import LocalException
-from nepseutils.core.portfolio import PortfolioEntry
-
+from nepseutils.core.issue import Issue
 from nepseutils.core.meroshare import MeroShare
+from nepseutils.core.portfolio import PortfolioEntry
+from nepseutils.utils import config_converter
 
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 logging.getLogger("urllib3").setLevel(logging.ERROR)
@@ -260,8 +260,6 @@ class NepseUtils(Cmd):
         headers = ["Name", "Alloted", "Quantity"]
         table = []
         for account in self.ms.accounts:
-            # account.fetch_applied_issues()
-
             issue_ins = None
             for issue in account.issues:
                 if issue.company_share_id == int(company_id):
@@ -269,14 +267,17 @@ class NepseUtils(Cmd):
                     break
 
             if not issue_ins:
-                table.append([account.name, "N/A", "N/A"])
+                table.append([account.name, "N/A", ""])
                 continue
+
+            if issue_ins.alloted == None:
+                account.fetch_applied_issues_status(company_id=company_id)
 
             table.append(
                 [
                     account.name,
-                    issue_ins.alloted,
-                    "N/A" if not issue_ins.alloted else issue_ins.alloted_quantity,
+                    "Yes" if issue_ins.alloted else "No",
+                    "" if not issue_ins.alloted else issue_ins.alloted_quantity,
                 ]
             )
         print(tabulate(table, headers=headers, tablefmt="pretty"))
@@ -507,11 +508,9 @@ class NepseUtils(Cmd):
             ):
                 for account in ms.accounts:
                     try:
-                        print(f"{issue}")
-                        print(f"{account}")
-                        # result = account.apply(
-                        #     share_id=issue.get("companyShareId"), quantity=1
-                        # )
+                        result = account.apply(
+                            share_id=issue.get("companyShareId"), quantity=1
+                        )
                     except Exception as e:
                         pass
 
@@ -526,13 +525,11 @@ def main():
     parser = argparse.ArgumentParser(description="Nepse Utility CLI")
 
     parser.add_argument("--password", help="Password for auto_apply")
-    parser.add_argument(
-        "--auto_apply", action="store_true", help="Enable auto_apply mode"
-    )
+    parser.add_argument("--auto", action="store_true", help="Enable auto_apply mode")
 
     args = parser.parse_args()
 
-    if args.auto_apply and args.password:
+    if args.auto and args.password:
         NepseUtils().auto(args.password)
     else:
         NepseUtils().cmdloop()

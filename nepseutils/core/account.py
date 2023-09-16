@@ -412,11 +412,11 @@ class Account:
         if refetch:
             self.issues = []
 
+        existing_issues = [issue.symbol for issue in self.issues]
+
         for report in application_reports:
-            # Skip if already exists
-            for issue in self.issues:
-                if issue.symbol == report.get("scrip"):
-                    continue
+            if report.get("scrip") in existing_issues:
+                continue
 
             self.issues.append(
                 Issue(
@@ -458,8 +458,15 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
-    def fetch_applied_issues_status(self) -> None:
-        for issue in self.issues or []:
+    def fetch_applied_issues_status(self, company_id: str | None = None) -> None:
+        if company_id is None:
+            issues = self.issues
+        else:
+            issues = [
+                issue for issue in self.issues if issue.company_share_id == company_id
+            ]
+
+        for issue in issues:
             # Skip if allotion status already fetched
             if issue.alloted != None:
                 continue
@@ -467,14 +474,14 @@ class Account:
             with self.__session as sess:
                 if not issue.old:
                     logging.info(
-                        f"Fetching application status for user: {self.name} for issue: {issue.symbol}"
+                        f"Fetching application status of issue {issue.symbol} for user: {self.name}"
                     )
                     details_req = sess.get(
                         f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{issue.applicant_form_id}",
                     )
                 else:
                     logging.info(
-                        f"Fetching application status for user: {self.name} for issue: {issue.symbol} (old)"
+                        f"Fetching application status of issue {issue.symbol} (old) for user: {self.name}"
                     )
                     details_req = sess.get(
                         f"{MS_API_BASE}/migrated/applicantForm/report/{issue.applicant_form_id}",
@@ -484,9 +491,7 @@ class Account:
                     logging.warning(
                         f"Failed to fetch application status for user: {self.name}\n {details_req.content}"
                     )
-                    raise LocalException(
-                        f"Failed to fetch application status for user: {self.name}!"
-                    )
+                    continue
 
                 details = details_req.json()
 
@@ -502,7 +507,7 @@ class Account:
                 issue.applied_quantity = details.get("appliedKitta")
                 issue.applied_amount = details.get("amount")
                 issue.block_amount_status = details.get("meroshareRemark")
-                break
+                self.save()
 
     @login_required
     @retry(
@@ -727,6 +732,9 @@ class Account:
                 raise GlobalError("No matching applicable issues!")
 
             if issue_to_apply.get("action"):
+                logging.warning(
+                    f"Issue already applied! {issue_to_apply} for user: {self.name}"
+                )
                 return {
                     "status": "CREATED",
                     "message": "Issue already applied!",
@@ -763,6 +771,10 @@ class Account:
                     f"Apply failed! Status code: {apply_req.status_code}, Message: {apply_req.content}"
                 )
                 raise LocalException(f"Apply failed for user {self.name}!")
+
+            logging.info(
+                f"Applied {quantity} kitta of {issue_to_apply.get('companyName')} for {self.name}!"
+            )
 
             self.fetch_applied_issues()
 
