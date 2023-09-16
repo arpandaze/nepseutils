@@ -150,7 +150,7 @@ class NepseUtils(Cmd):
 
         table = [
             [itm.get("companyShareId"), itm.get("scrip"), itm.get("companyName")]
-            for itm in results
+            for itm in results[::-1]
         ]
 
         print(tabulate(table, headers=headers, tablefmt="pretty"))
