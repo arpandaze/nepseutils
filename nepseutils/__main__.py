@@ -249,6 +249,74 @@ class NepseUtils(Cmd):
             self.ms.tag_selections = args
             self.prompt = f"NepseUtils ({','.join(self.ms.tag_selections)}) > "
 
+    def do_sync(self, args):
+        for account in self.ms.accounts:
+            account.fetch_portfolio()
+            account.fetch_applied_issues_status()
+
+    def do_alloted(self, args):
+        headers = [
+            "Name",
+            "Total Applied",
+            "Total Rejected",
+            "Total Allocations",
+            "Total Units Alloted",
+            "Total Amount Alloted",
+            "% Alloted",
+        ]
+        table = []
+
+        for account in self.ms.accounts:
+            account_applied = len(account.issues)
+            account_alloted = 0
+            account_rejected = 0
+            account_units_alloted = 0.0
+            account_amount_alloted = 0.0
+
+            for issue in account.issues:
+                if issue.alloted:
+                    account_alloted += 1
+                    account_units_alloted += issue.alloted_quantity or 0
+                    account_amount_alloted += issue.applied_amount or 0
+
+                if issue.status == "BLOCK_FAILED":
+                    account_rejected += 1
+
+            table.append(
+                [
+                    account.name,
+                    account_applied,
+                    account_rejected,
+                    account_alloted,
+                    account_units_alloted,
+                    account_amount_alloted,
+                    f"{account_alloted/account_applied*100:.2f}%",
+                ]
+            )
+
+        total_applied = sum([itm[1] for itm in table])
+        total_rejected = sum([itm[2] for itm in table])
+        total_alloted = sum([itm[3] for itm in table])
+        total_units_alloted = sum([itm[4] for itm in table])
+        total_amount_alloted = sum([itm[5] for itm in table])
+        total_percent_alloted = (
+            total_alloted / total_applied * 100 if total_applied > 0 else 0.0
+        )
+
+        table.append(
+            [
+                "Total",
+                total_applied,
+                total_rejected,
+                total_alloted,
+                total_units_alloted,
+                f"{total_amount_alloted:.2f}",
+                f"{total_percent_alloted:.2f}%",
+            ]
+        )
+
+        print(tabulate(table, headers=headers, tablefmt="pretty"))
+
     def do_result(self, args):
         if not args:
             self.do_list(args="results")

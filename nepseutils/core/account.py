@@ -467,6 +467,10 @@ class Account:
             ]
 
         for issue in issues:
+            # Skip if amount failed to block
+            if issue.status == "BLOCK_FAILED":
+                continue
+
             # Skip if allotion status already fetched
             if issue.alloted != None:
                 continue
@@ -484,12 +488,12 @@ class Account:
                         f"Fetching application status of issue {issue.symbol} (old) for user: {self.name}"
                     )
                     details_req = sess.get(
-                        f"{MS_API_BASE}/migrated/applicantForm/report/{issue.applicant_form_id}",
+                        f"{MS_API_BASE}/meroShare/migrated/applicantForm/report/{issue.applicant_form_id}",
                     )
 
                 if details_req.status_code != 200:
                     logging.warning(
-                        f"Failed to fetch application status for user: {self.name}\n {details_req.content}"
+                        f"Failed to fetch application status of issue {issue.symbol} for user: {self.name}\n {details_req.content} \n {MS_API_BASE}/migrated/applicantForm/report/{issue.applicant_form_id}"
                     )
                     continue
 
