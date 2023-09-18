@@ -1,8 +1,6 @@
 #!/usr/bin/python3
-# -*- coding: utf-8 -*-
 
 import argparse
-import asyncio
 import logging
 import os
 from cmd import Cmd
@@ -14,7 +12,6 @@ from tabulate import tabulate
 
 from nepseutils.core.account import Account
 from nepseutils.core.errors import LocalException
-from nepseutils.core.issue import Issue
 from nepseutils.core.meroshare import MeroShare
 from nepseutils.core.portfolio import PortfolioEntry
 from nepseutils.utils import config_converter
@@ -49,6 +46,10 @@ class NepseUtils(Cmd):
                 print("Incorrect password!")
                 print(e)
                 exit()
+
+    def help_add(self):
+        print("Add a new account!")
+        print("Usage: add {dmat} {password} {crn} {pin}")
 
     def do_add(self, args):
         args = args.split(" ")
@@ -97,9 +98,10 @@ class NepseUtils(Cmd):
 
         logging.info(f"Successfully obtained details for account: {account.name}")
 
-    def help_add(self):
-        print("Add a new account!")
-        print("Usage: add {dmat} {password} {crn} {pin}")
+    def help_remove(self):
+        print("Remove an account!")
+        print("Usage: remove")
+        print("Then choose an account ID from the list!")
 
     def do_remove(self, args):
         self.do_list(args="accounts")
@@ -161,6 +163,12 @@ class NepseUtils(Cmd):
         table = [[key, value] for key, value in self.ms.capitals.items()]
         print(tabulate(table, headers=headers, tablefmt="pretty"))
 
+    def help_portfolio(self):
+        print("List portfolio of an account!")
+        print("Usage: portfolio {account_id}")
+        print("OR")
+        print("Usage: portfolio all")
+
     def do_portfolio(self, args):
         portfolio: List[PortfolioEntry] = []
 
@@ -212,6 +220,10 @@ class NepseUtils(Cmd):
         table.append(["Total", "", "", f"{total_value:,.1f}"])
         print(tabulate(table, headers=headers, tablefmt="pretty"))
 
+    def help_list(self):
+        print("List accounts, capitals or results!")
+        print("Usage: list { accounts | accounts full | capitals | results }")
+
     def do_list(self, args):
         args = args.split(" ")
 
@@ -231,8 +243,10 @@ class NepseUtils(Cmd):
         elif args[0] == "results":
             return self.list_results()
 
-    def help_list(self):
-        print("Lists added accounts")
+    def help_select(self):
+        print("Selects accounts with specific tag to be used for further commands!")
+        print("Usage: select {tag-name}")
+        print("Usage: select all")
 
     def do_select(self, args):
         if not args:
@@ -249,12 +263,21 @@ class NepseUtils(Cmd):
             self.ms.tag_selections = args
             self.prompt = f"NepseUtils ({','.join(self.ms.tag_selections)}) > "
 
+    def help_sync(self):
+        print("Syncs unfetched portfolio and application status from MeroShare!")
+
     def do_sync(self, args):
         for account in self.ms.accounts:
             account.fetch_portfolio()
+            account.fetch_applied_issues()
             account.fetch_applied_issues_status()
+            print(f"Synced {account.name}!")
 
-    def do_alloted(self, args):
+    def help_stats(self):
+        print("Shows statistics of accounts!")
+        print("Usage: stats")
+
+    def do_stats(self, args):
         headers = [
             "Name",
             "Total Applied",
@@ -365,6 +388,9 @@ class NepseUtils(Cmd):
 
         account.tag = tag
         self.ms.save_data()
+
+    def help_tag(self):
+        print("Tag an account to group them!")
 
     def help_result(self):
         print("Check results of IPO")
@@ -500,8 +526,9 @@ class NepseUtils(Cmd):
             self.ms.accounts[int(account_id) - 1].password = new_password
             self.ms.save_data()
 
-    def do_azcaptcha(self, args):
-        logging.warning("This command is deprecated!")
+    def help_loglevel(self):
+        print("Set logging level")
+        print("Usage: loglevel {debug | info | warning | error | critical}")
 
     def do_loglevel(self, args):
         if args == "debug":
@@ -534,6 +561,10 @@ class NepseUtils(Cmd):
 
     def do_clear(self, args):
         os.system("cls" if os.name == "nt" else "clear")
+
+    def help_telegram(self):
+        print("Enable or disable telegram notifications")
+        print("Usage: telegram {enable | disable}")
 
     def do_telegram(self, args):
         if args == "enable":
