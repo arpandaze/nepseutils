@@ -478,16 +478,25 @@ class NepseUtils(Cmd):
                     ]
                     for itm in reports
                 ]
-                print(tabulate(table, headers=headers, tablefmt="pretty"))
+                print(tabulate(table[::-1], headers=headers, tablefmt="pretty"))
 
                 company_share_id = input("Enter Share ID: ")
 
-            form_id = [
-                itm.get("applicantFormId")
-                for itm in reports
-                if itm.get("companyShareId") == int(company_share_id)
-            ][0]
-            detailed_form = account.fetch_application_status(form_id=form_id)
+            form_id = None
+            for forms in reports:
+                if forms.get("companyShareId") == int(company_share_id) and forms.get(
+                    "applicantFormId"
+                ):
+                    form_id = forms.get("applicantFormId")
+                    break
+
+            try:
+                detailed_form = account.fetch_application_status(form_id=form_id)
+            except LocalException as e:
+                account.logout()
+                status_table.append([account.name, "N/A", "N/A"])
+                continue
+
             account.logout()
             status_table.append(
                 [
@@ -504,7 +513,7 @@ class NepseUtils(Cmd):
 
         if args[0] == "lock":
             password = getpass(prompt="Enter new password for NepseUtils: ")
-            self.ms.fernet_init(password)
+            self.ms.fernet = self.ms.fernet_init(password)
             self.ms.save_data()
             print("Password changed successfully!")
             exit(0)
