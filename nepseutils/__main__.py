@@ -600,18 +600,35 @@ class NepseUtils(Cmd):
 
         applicable_issues = ms.default_account.fetch_applicable_issues()
 
+        has_applicable = False
         for issue in applicable_issues:
             if (
                 issue.get("shareTypeName") == "IPO"
                 and issue.get("shareGroupName") == "Ordinary Shares"
+                and issue.get("subGroup") == "For General Public"
             ):
+                has_applicable = True
+                share_id = issue.get("companyShareId")
+                try:
+                    min_unit = ms.default_account.find_min_apply_unit(share_id)
+                except Exception as _:
+                    min_unit = 10
+
                 for account in ms.accounts:
                     try:
-                        result = account.apply(
-                            share_id=issue.get("companyShareId"), quantity=1
-                        )
-                    except Exception as e:
+                        account.apply(share_id=int(share_id), quantity=min_unit)
+                    except Exception as _:
                         pass
+
+        if not has_applicable:
+            logging.info("No applicable issues found!")
+
+        ms.save_data()
+
+        for account in ms.accounts:
+            account.fetch_applied_issues_status()
+
+        ms.save_data()
 
     def default(self, inp):
         if inp == "x" or inp == "q" or inp == "EOF":
