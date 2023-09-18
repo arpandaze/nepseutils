@@ -626,6 +626,31 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
+    def find_min_apply_unit(self, company_share_id) -> int:
+        with self.__session as sess:
+            min_apply_unit_req = sess.get(
+                f"{MS_API_BASE}/meroShare/active/{company_share_id}",
+            )
+
+            if min_apply_unit_req.status_code != 200:
+                logging.warning(
+                    f"Min apply unit request failed for user: {self.name}\n {min_apply_unit_req.content}"
+                )
+                raise LocalException(
+                    f"Min apply unit request failed for user: {self.name}!"
+                )
+
+            min_apply_unit_response_json = min_apply_unit_req.json()
+
+            return int(min_apply_unit_response_json.get("minUnit"))
+
+    @login_required
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+        reraise=True,
+        retry=retry_if_exception_type(LocalException),
+    )
     def fetch_edis_history(self):
         with self.__session as sess:
             data = {
