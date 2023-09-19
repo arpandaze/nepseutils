@@ -1,7 +1,7 @@
 import logging
-
 import threading
 import requests
+from queue import Queue
 
 
 class TelegramLoggingHandler(logging.Handler):
@@ -9,6 +9,11 @@ class TelegramLoggingHandler(logging.Handler):
         super().__init__()
         self.token = token
         self.chat_id = chat_id
+        self.log_queue = Queue()
+        self.flush_interval = 1
+        self.flush_thread = threading.Thread(target=self.flush_logs_periodically)
+        self.flush_thread.daemon = True
+        self.flush_thread.start()
 
     def send_telegram_message(self, message: str):
         if self.token and self.chat_id:
@@ -21,5 +26,18 @@ class TelegramLoggingHandler(logging.Handler):
 
     def emit(self, record):
         log_entry = self.format(record)
-        thread = threading.Thread(target=self.send_telegram_message, args=(log_entry,))
-        thread.start()
+        self.log_queue.put(log_entry)
+
+    def flush_logs_periodically(self):
+        while True:
+            if not self.log_queue.empty():
+                log_messages = []
+                while not self.log_queue.empty():
+                    log_messages.append(self.log_queue.get())
+                batched_log = "\n".join(log_messages)
+                self.send_telegram_message(batched_log)
+
+    def shutdown(self):
+        print(f"{self.__class__.__name__} is shutting down. {self.flush_thread}")
+        self.flush_thread.join()
+        super().close()
