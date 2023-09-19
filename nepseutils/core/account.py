@@ -433,12 +433,18 @@ class Account:
         application_reports = self.fetch_application_reports(active=False)
 
         for report in application_reports:
+            found = False
+
             # Skip if already exists and mark as old
             for issue in self.issues:
                 if issue.symbol == report.get("scrip"):
                     if issue.old == False:
                         issue.old = True
-                    continue
+                    found = True
+                    break
+
+            if found:
+                continue
 
             self.issues.append(
                 Issue(
@@ -451,6 +457,8 @@ class Account:
                     old=True,
                 )
             )
+
+        self.save()
 
     @retry(
         stop=stop_after_attempt(3),
@@ -500,8 +508,14 @@ class Account:
                 details = details_req.json()
 
                 if details.get("statusName") == "Alloted":
+                    logging.info(
+                        f"Application status of issue {issue.symbol} is ALLOTED for user: {self.name}"
+                    )
                     issue.alloted = True
                 elif details.get("statusName") == "Not Alloted":
+                    logging.info(
+                        f"Application status of issue {issue.symbol} is NOT Alloted for user: {self.name}"
+                    )
                     issue.alloted = False
                 else:
                     issue.alloted = None
@@ -537,9 +551,9 @@ class Account:
 
             if not form_id:
                 logging.critical(
-                    "No issue with provided id found in recent application history!"
+                    f"No issue with provided id found in recent application history for user: {self.name}"
                 )
-                raise Exception("Issue not found!")
+                raise LocalException("Issue not found!")
 
             details_req = sess.get(
                 f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{form_id}",
@@ -747,6 +761,10 @@ class Account:
 
         with self.__session as sess:
             issue_to_apply = None
+
+            logging.info(
+                f"Applying {quantity} units of {share_id} for user: {self.name}"
+            )
 
             applicable_issue = self.fetch_applicable_issues()
 
