@@ -1,71 +1,104 @@
+<div align="center">
+
 # NEPSE Utils
-Collection of scripts to interact with NEPSE related sites.
+
+![Release Pipeline](https://github.com/arpandaze/nepseutils/actions/workflows/release.yml/badge.svg)
+![PyPI - Version](https://img.shields.io/pypi/v/nepseutils)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/nepseutils)
+
+CLI Application written in Python to automatically apply IPO openings from multiple accounts at once!
+
+</div>
+
+## Commands:
+
+| Command         | Description                                                        |
+| --------------- | ------------------------------------------------------------------ |
+| `add`           | Add an account                                                     |
+| `apply`         | Apply open issues                                                  |
+| `result`        | Check IPO result                                                   |
+| `status`        | Check IPO application status                                       |
+| `tag`           | Tag an account to group them                                       |
+| `select`        | Selects accounts with specific tag to be used for further commands |
+| `portfolio`     | List portfolio of an account                                       |
+| `sync`          | Syncs unfetched portfolio and application status from MeroShare    |
+| `stats`         | Shows overall statistics of accounts                               |
+| `remove`        | Remove an account                                                  |
+| `change lock`   | Change unlock password                                             |
+| `list accounts` | Show list of accounts                                              |
+| `list results`  | Show list of results                                               |
+| `loglevel`      | Set log level                                                      |
+| `telegram`      | Enable or disable telegram notification                            |
+| `help`          | Shows list of commands                                             |
+| `exit`          | Exit the shell                                                     |
+
+**Note: Use `help {command}` for help regarding commands!**
 
 ## Installation instruction
 
 ### For Windows:
-* **Step 1:** Download Python installer from [here](http://python.org/downloads). Choose version greater than 3.9.
-* **Step 2:** Launch the installer, tick "Add Python 3.10 to PATH" on the first page and complete the installation.
-* **Step 3:** Search for command prompt and open it.
-* **Step 4:** Verify that you have python version greater than 3.9 by typing `python --version`
-* **Step 5:** Verify that you have pip installed by entering `pip --version`
-* **Step 6:** Install nepseutils by entering: `pip install nepseutils`
-* **Step 7:** Launch nepseutils by entering: `python -m nepseutils`
+
+- **Step 1:** Download Python installer from [here](http://python.org/downloads). Choose version greater than 3.9.
+- **Step 2:** Launch the installer, tick "Add Python 3.10 to PATH" on the first page and complete the installation.
+- **Step 3:** Search for command prompt and open it.
+- **Step 4:** Verify that you have python version greater than 3.9 by typing `python --version`
+- **Step 5:** Verify that you have pip installed by entering `pip --version`
+- **Step 6:** Install nepseutils by entering: `pip install nepseutils`
+- **Step 7:** Launch nepseutils by entering: `python -m nepseutils`
 
 ### For Linux and Mac:
-* **Step 1:** Install Python (Version greater than 3.9) using your package manager.
-* **Step 2:** Pip might not come with python in some of the distros. To install it, you can use your package manager or enter the following command `curl https://bootstrap.pypa.io/get-pip.py | python`
-* **Step 3:** Verify that you have python version greater than 3.9 by typing `python --version`
-* **Step 4:** Verify that you have pip installed by entering `pip --version`
-* **Step 5:** Install nepseutils by entering: `pip install nepseutils`
-* **Step 6:** Launch nepseutils by entering: `python -m nepseutils`
 
-*Note: Some distros might default to python2 when both python2 and python3 are installed so you might need to enter python3 and pip3 instead of python and pip.*
+- **Step 1:** Install Python (Version greater than 3.9) using your package manager.
+- **Step 2:** Pip might not come with python in some of the distros. To install it, you can use your package manager or enter the following command `curl https://bootstrap.pypa.io/get-pip.py | python`
+- **Step 3:** Verify that you have python version greater than 3.9 by typing `python --version`
+- **Step 4:** Verify that you have pip installed by entering `pip --version`
+- **Step 5:** Install nepseutils by entering: `pip install nepseutils`
+- **Step 6:** Launch nepseutils by entering: `python -m nepseutils`
 
-## Commands:
-|  Command       |  Description                 |
-|----------------|------------------------------|
-|`add`           | Add an account               |
-|`remove`        | Remove an account            |
-|`change lock`   | Change unlock password       |
-|`list accounts` | Show list of accounts        |
-|`list results`  | Show list of results         |
-|`azcaptcha init`| Add azcaptcha token          |
-|`apply`         | Apply open issues            |
-|`status`        | Check IPO application status |
-|`result`        | Check IPO result             |
-|`exit`          | Exit the shell               |
+_Note: Some distros might default to python2 when both python2 and python3 are installed so you might need to enter python3 and pip3 instead of python and pip._
 
-## Usage
+## Basic Usage
 
 You can launch nepseutils by entering `python -m nepseutils` in your command line. On the first launch, it will ask you to set a new password for nepseutils (Not MeroShare). You will have to enter this next time you launch nepseutils.
+
 ### Launching nepseutils:
+
 ```
 python -m nepseutils
 ```
 
 ### Adding an account
+
 #### Command:
+
 ```
 add {16_digit_dmat_number} {meroshare_password} {crn} {meroshare_pin}
 ```
-*You don't need to enter other infos. It will be automatically obtained.*
+
+_You don't need to enter other infos. It will be automatically obtained._
+
 #### Example:
+
 ```
-NepseUtils > add 1234567891234567 myp@ssw0rd 02-R00222224 1234 
+NepseUtils > add 1234567891234567 myp@ssw0rd 02-R00222224 1234
 ```
+
 #### Sample Output:
+
 ```
 Successfully obtained details for account: Ram Bahadur
 ```
 
 ### Applying for IPO
+
 #### Command:
+
 ```
 apply
 ```
 
 Then you will see this kind of output:
+
 ```
 NepseUtils > apply
 +----------+----------------+-------+------------+
@@ -75,21 +108,26 @@ NepseUtils > apply
 +----------+--------------+-------+--------------+
 Enter Share ID:
 ```
+
 Enter share ID of company that you want to apply for.
 
 ```
 Enter Share ID: 401
 Units to Apply:
 ```
+
 Enter number of units (Not rupees) that you want to apply. This will apply IPO for all the added accounts.
 
 ### Checking IPO Result
-*Note: MeroShare has added a captcha for checking result. AZCaptcha token is needed for automatically solving captchas. Add token with `azcaptcha init`!*
+
 #### Command:
+
 ```
 result
 ```
+
 #### Sample Output:
+
 ```
 NepseUtils > result
 +----+------------+-------------------------------------------------+
@@ -136,13 +174,16 @@ Choose a company ID: 21
 +----------------------------+---------+----------+
 ```
 
-
 ### Removing account
+
 #### Command:
+
 ```
 remove
 ```
+
 #### Sample Output
+
 ```
 +----+----------------------------+------------------+------------------+--------------+
 | ID |            Name            |       DMAT       |     Account      |     CRN      |
@@ -153,14 +194,19 @@ remove
 +----+----------------------------+------------------+------------------+--------------+
 Choose an account ID:
 ```
+
 Then choose account to remove.
 
 ### Show added accounts
+
 #### Command:
+
 ```
 list accounts
 ```
+
 #### Sample Output
+
 ```
 +----+----------------------------+------------------+------------------+--------------+
 | ID |            Name            |       DMAT       |     Account      |     CRN      |
