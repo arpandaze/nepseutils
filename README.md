@@ -36,33 +36,22 @@ CLI Application written in Python to automatically apply IPO openings from multi
 
 ## Installation instruction
 
-### For Windows:
+- Install Python (Version greater than 3.9) using your package manager.
+- Install nepseutils using pipx (recommended): `pipx install nepseutils`
+- Launch from command line with `nepseutils`
 
-- **Step 1:** Download Python installer from [here](http://python.org/downloads). Choose version greater than 3.9.
-- **Step 2:** Launch the installer, tick "Add Python 3.10 to PATH" on the first page and complete the installation.
-- **Step 3:** Search for command prompt and open it.
-- **Step 4:** Verify that you have python version greater than 3.9 by typing `python --version`
-- **Step 5:** Verify that you have pip installed by entering `pip --version`
-- **Step 6:** Install nepseutils by entering: `pip install nepseutils`
-- **Step 7:** Launch nepseutils by entering: `python -m nepseutils`
-
-### For Linux and Mac:
-
-- **Step 1:** Install Python (Version greater than 3.9) using your package manager.
-- **Step 2:** Pip might not come with python in some of the distros. To install it, you can use your package manager or enter the following command `curl https://bootstrap.pypa.io/get-pip.py | python`
-- **Step 3:** Verify that you have python version greater than 3.9 by typing `python --version`
-- **Step 4:** Verify that you have pip installed by entering `pip --version`
-- **Step 5:** Install nepseutils by entering: `pip install nepseutils`
-- **Step 6:** Launch nepseutils by entering: `python -m nepseutils`
-
-_Note: Some distros might default to python2 when both python2 and python3 are installed so you might need to enter python3 and pip3 instead of python and pip._
+_Note: If pipx is not available, use pip to install using `pip3 install nepseutils` and launch using `python -m nepseutils`_
 
 ## Basic Usage
 
-You can launch nepseutils by entering `python -m nepseutils` in your command line. On the first launch, it will ask you to set a new password for nepseutils (Not MeroShare). You will have to enter this next time you launch nepseutils.
+You can launch nepseutils by entering `nepseutils` in your command line. On the first launch, it will ask you to set a new password for nepseutils (Not MeroShare). You will have to enter this next time you launch nepseutils.
 
-### Launching nepseutils:
+### Launching nepseutils
 
+```
+nepseutils
+```
+OR
 ```
 python -m nepseutils
 ```
