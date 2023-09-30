@@ -635,6 +635,7 @@ class NepseUtils(Cmd):
         ms.save_data()
 
         for account in ms.accounts:
+            account.fetch_applied_issues()
             account.fetch_applied_issues_status()
 
         ms.save_data()
