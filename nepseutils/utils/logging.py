@@ -1,4 +1,5 @@
 import logging
+from time import sleep
 import threading
 import requests
 from queue import Queue
@@ -30,14 +31,17 @@ class TelegramLoggingHandler(logging.Handler):
 
     def flush_logs_periodically(self):
         while True:
-            if not self.log_queue.empty():
-                log_messages = []
-                while not self.log_queue.empty():
-                    log_messages.append(self.log_queue.get())
-                batched_log = "\n".join(log_messages)
-                self.send_telegram_message(batched_log)
+            sleep(self.flush_interval)
+            self.flush()
+
+    def flush(self):
+        if not self.log_queue.empty():
+            log_messages = []
+            while not self.log_queue.empty():
+                log_messages.append(self.log_queue.get())
+            batched_log = "\n".join(log_messages)
+            self.send_telegram_message(batched_log)
 
     def shutdown(self):
-        print(f"{self.__class__.__name__} is shutting down. {self.flush_thread}")
-        self.flush_thread.join()
+        self.flush()
         super().close()

@@ -36,6 +36,8 @@ class MeroShare:
     config_path: Path
     fernet: Fernet
 
+    logging_handler: TelegramLoggingHandler
+
     @property
     def accounts(self) -> List[Account]:
         if self.tag_selections != []:
@@ -65,11 +67,14 @@ class MeroShare:
         self.telegram_chat_id = telegram_chat_id
 
         if telegram_bot_token and telegram_chat_id:
+            self.logging_handler = TelegramLoggingHandler(
+                telegram_bot_token, telegram_chat_id
+            )
             logging.basicConfig(
                 format="%(asctime)s %(message)s",
                 level=self.logging_level,
                 force=True,
-                handlers=[TelegramLoggingHandler(telegram_bot_token, telegram_chat_id)],
+                handlers=[self.logging_handler],
             )
         else:
             if not os.path.exists(MeroShare.default_config_directory()):

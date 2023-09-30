@@ -639,6 +639,7 @@ class NepseUtils(Cmd):
             account.fetch_applied_issues_status()
 
         ms.save_data()
+        ms.logging_handler.shutdown()
 
     def default(self, inp):
         if inp == "x" or inp == "q" or inp == "EOF":
