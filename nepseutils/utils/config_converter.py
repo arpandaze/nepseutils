@@ -1,14 +1,14 @@
 import base64
-from getpass import getpass
 import json
+from getpass import getpass
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 from nepseutils.core.account import Account
 from nepseutils.core.errors import LocalException
-
 from nepseutils.core.meroshare import MeroShare
 
 

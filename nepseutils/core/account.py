@@ -1,18 +1,19 @@
-from collections.abc import Callable
 import logging
+from collections.abc import Callable
 from typing import List, Optional
 
 import requests
 from tenacity import retry
+from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_fixed
-from tenacity.retry import retry_if_exception_type
 
 from nepseutils.constants import MS_API_BASE
+from nepseutils.utils.decorators import autosave, login_required
+
 from .errors import GlobalError, LocalException
 from .issue import Issue
 from .portfolio import Portfolio, PortfolioEntry
-from nepseutils.utils.decorators import login_required, autosave
 
 
 class Account:

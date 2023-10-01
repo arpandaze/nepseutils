@@ -13,11 +13,10 @@ from tenacity import retry
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_fixed
 
-from nepseutils.core.account import Account
 from nepseutils.constants import BASE_HEADERS, MS_API_BASE
+from nepseutils.core.account import Account
 from nepseutils.core.errors import LocalException
 from nepseutils.utils.logging import TelegramLoggingHandler
-
 from nepseutils.version import __version__
 
 DEFAULT_CONFIG_FILENAME = "config.json"

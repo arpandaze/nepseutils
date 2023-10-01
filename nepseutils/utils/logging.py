@@ -1,8 +1,9 @@
 import logging
-from time import sleep
 import threading
-import requests
 from queue import Queue
+from time import sleep
+
+import requests
 
 
 class TelegramLoggingHandler(logging.Handler):
