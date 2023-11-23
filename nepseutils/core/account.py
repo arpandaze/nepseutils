@@ -476,10 +476,6 @@ class Account:
             ]
 
         for issue in issues:
-            # Skip if amount failed to block
-            if issue.status == "BLOCK_FAILED":
-                continue
-
             # Skip if allotion status already fetched
             if issue.alloted != None:
                 continue
@@ -518,10 +514,18 @@ class Account:
                         f"Application status of issue {issue.symbol} is NOT Alloted for user: {self.name}"
                     )
                     issue.alloted = False
+                elif details.get("statusName") == "Rejected":
+                    logging.warn(
+                        f"Application status of issue {issue.symbol} is REJECTED for user: {self.name}"
+                    )
+                    issue.alloted = False
                 else:
                     issue.alloted = None
 
-                issue.alloted_quantity = details.get("receivedKitta")
+                issue.alloted_quantity = (
+                    details.get("receivedKitta") if issue.alloted else 0
+                )
+
                 issue.applied_date = details.get("appliedDate")
                 issue.applied_quantity = details.get("appliedKitta")
                 issue.applied_amount = details.get("amount")
