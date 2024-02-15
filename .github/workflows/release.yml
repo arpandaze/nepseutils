@@ -12,22 +12,34 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.3.0
+        uses: actions/checkout@v3
         with:
-          lfs: true
-          fetch-depth: 0
+          ref: main
         
       - name: Set ENV
         run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
         
       - name: Install Poetry
-        run: pipx install poetry
+        run: |
+          pipx install poetry
+          poetry self add poetry-bumpversion
         
       - name: Setup Python
         uses: actions/setup-python@v4.5.0
         with:
           python-version: "3.11"
           cache: 'poetry'
+
+      - name: Bump package version
+        run: poetry version $(echo "${{ env.RELEASE_VERSION }}" | sed 's/v//')
+
+      - name: Commit and push version bump
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add -u
+          git commit -m "chore(release): ${{ env.RELEASE_VERSION }} release"
+          git push
 
       - name: Install Dependencies
         run: poetry install
