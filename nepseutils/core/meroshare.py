@@ -274,12 +274,10 @@ class MeroShare:
         return capitals
 
     @staticmethod
-    # @retry(stop=stop_after_attempt(5), wait=wait_fixed(3), reraise=True)
     def fetch_result_company_list() -> list:
         with requests.Session() as sess:
             sess.headers = BASE_HEADERS  # type: ignore
-
-            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)  # type: ignore
+            sess.verify = False
 
             response = sess.get(
                 "https://iporesult.cdsc.com.np/result/companyShares/fileUploaded",

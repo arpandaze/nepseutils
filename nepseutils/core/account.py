@@ -8,7 +8,7 @@ from tenacity.retry import retry_if_exception_type
 from tenacity.stop import stop_after_attempt
 from tenacity.wait import wait_fixed
 
-from nepseutils.constants import MS_API_BASE
+from nepseutils.constants import BASE_HEADERS, MS_API_BASE
 from nepseutils.utils.decorators import autosave, login_required
 
 from .errors import GlobalError, LocalException
@@ -84,6 +84,11 @@ class Account:
             self.save = save
 
         self.__session = requests.Session()
+        self.__session.headers.update(BASE_HEADERS)
+
+        # Meroshare has bad SSL configuration so we need to disable SSL verification
+        self.__session.verify = False
+
         self.auth_token = __auth_token
 
         if not self.dpid:
