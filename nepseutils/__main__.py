@@ -207,6 +207,10 @@ class NepseUtils(Cmd):
         for entry in portfolio:
             total_value += entry.value_as_of_last_transaction_price
 
+        total_value_as_of_closing = 0.0
+        for entry in portfolio:
+            total_value_as_of_closing += entry.value_as_of_previous_closing_price
+
         headers = [
             "Scrip",
             "Balance",
@@ -226,7 +230,7 @@ class NepseUtils(Cmd):
             ]
             for itm in portfolio
         ]
-        table.append(["Total", "", "", f"{total_value:,.1f}"])
+        table.append(["Total", "", "","",f"{total_value_as_of_closing:,.1f}", f"{total_value:,.1f}"])
         print(tabulate(table, headers=headers, tablefmt="pretty"))
 
     def help_list(self):
