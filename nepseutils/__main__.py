@@ -207,12 +207,21 @@ class NepseUtils(Cmd):
         for entry in portfolio:
             total_value += entry.value_as_of_last_transaction_price
 
-        headers = ["Scrip", "Balance", "Last Transaction Price", "Value"]
+        headers = [
+            "Scrip",
+            "Balance",
+            "Previous Closing Price",
+            "Last Transaction Price",
+            "Value as of Prev Closing",
+            "Value",
+        ]
         table = [
             [
                 itm.script,
                 itm.current_balance,
+                f"{itm.previous_closing_price:,.1f}",
                 f"{itm.last_transaction_price:,.1f}",
+                f"{itm.value_as_of_previous_closing_price:,.1f}",
                 f"{itm.value_as_of_last_transaction_price:,.1f}",
             ]
             for itm in portfolio
