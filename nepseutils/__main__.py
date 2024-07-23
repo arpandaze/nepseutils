@@ -186,6 +186,9 @@ class NepseUtils(Cmd):
                             combined_entry.value_as_of_last_transaction_price += (
                                 entry.value_as_of_last_transaction_price
                             )
+                            combined_entry.value_as_of_previous_closing_price += (
+                                entry.value_as_of_previous_closing_price
+                            )
                             found = True
                             break
 
@@ -204,11 +207,9 @@ class NepseUtils(Cmd):
             portfolio = account.portfolio.entries
 
         total_value = 0.0
-        for entry in portfolio:
-            total_value += entry.value_as_of_last_transaction_price
-
         total_value_as_of_closing = 0.0
         for entry in portfolio:
+            total_value += entry.value_as_of_last_transaction_price
             total_value_as_of_closing += entry.value_as_of_previous_closing_price
 
         headers = [
@@ -218,6 +219,8 @@ class NepseUtils(Cmd):
             "Last Transaction Price",
             "Value as of Prev Closing",
             "Value",
+            "+/- Amount",
+            "+/- %",
         ]
         table = [
             [
@@ -227,10 +230,14 @@ class NepseUtils(Cmd):
                 f"{itm.last_transaction_price:,.1f}",
                 f"{itm.value_as_of_previous_closing_price:,.1f}",
                 f"{itm.value_as_of_last_transaction_price:,.1f}",
+                f"{itm.value_as_of_last_transaction_price - itm.value_as_of_previous_closing_price:,.1f}",
+                f"{(itm.value_as_of_last_transaction_price - itm.value_as_of_previous_closing_price)/itm.value_as_of_previous_closing_price*100:,.2f}%",
             ]
             for itm in portfolio
         ]
-        table.append(["Total", "", "","",f"{total_value_as_of_closing:,.1f}", f"{total_value:,.1f}"])
+        total_diff = total_value - total_value_as_of_closing
+        total_diff_percent = total_diff / total_value_as_of_closing * 100
+        table.append(["Total", "", "","",f"{total_value_as_of_closing:,.1f}", f"{total_value:,.1f}", f"{total_diff:,.1f}", f"{total_diff_percent:,.2f}%"])
         print(tabulate(table, headers=headers, tablefmt="pretty"))
 
     def help_list(self):
