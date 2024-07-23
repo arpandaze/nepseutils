@@ -86,9 +86,6 @@ class Account:
         self.__session = requests.Session()
         self.__session.headers.update(BASE_HEADERS)
 
-        # Meroshare has bad SSL configuration so we need to disable SSL verification
-        self.__session.verify = False
-
         self.auth_token = __auth_token
 
         if not self.dpid:

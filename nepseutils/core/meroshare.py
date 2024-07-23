@@ -277,11 +277,9 @@ class MeroShare:
     def fetch_result_company_list() -> list:
         with requests.Session() as sess:
             sess.headers = BASE_HEADERS  # type: ignore
-            sess.verify = False
 
             response = sess.get(
                 "https://iporesult.cdsc.com.np/result/companyShares/fileUploaded",
-                verify=False,
             )
 
             if response.status_code != 200:
