@@ -30,6 +30,7 @@ class Account:
     branch_id: Optional[str] = None
     customer_id: Optional[str] = None
     bank_id: Optional[str] = None
+    account_type_id: Optional[str] = None
 
     auth_token: Optional[str] = None
 
@@ -54,6 +55,7 @@ class Account:
         branch_id: Optional[str] = None,
         customer_id: Optional[str] = None,
         bank_id: Optional[str] = None,
+        account_type_id: Optional[str] = None,
         portfolio: Optional[Portfolio] = None,
         issues: Optional[List[Issue]] = None,
         tag: Optional[str] = None,
@@ -206,7 +208,7 @@ class Account:
 
                 self.bank_id = bank_req[0].get("id")
 
-            if (not self.branch_id) or (not self.customer_id):
+            if (not self.branch_id) or (not self.customer_id) or (not self.account_type_id):
                 bank_specific_req = sess.get(
                     f"{MS_API_BASE}/meroShare/bank/{self.bank_id}"
                 )
@@ -219,13 +221,16 @@ class Account:
                         f"Failed to get bank specific details for user: {self.name}!"
                     )
 
-                bank_specific_response_json = bank_specific_req.json()
+                bank_specific_response_json = bank_specific_req.json()[0]
 
                 if not self.branch_id:
                     self.branch_id = bank_specific_response_json.get("accountBranchId")
 
                 if not self.customer_id:
                     self.customer_id = bank_specific_response_json.get("id")
+
+                if not self.account_type_id:
+                    self.account_type_id = bank_specific_response_json.get("accountTypeId")
 
         return {
             "dmat": self.dmat,
@@ -761,8 +766,10 @@ class Account:
             and self.crn
             and self.pin
             and self.bank_id
+            and self.account_type_id
         ):
             self.get_details()
+            self.save()
 
         assert share_id and quantity, "Share ID and quantity must be provided!"
 
@@ -808,6 +815,7 @@ class Account:
                 "accountNumber": self.account,
                 "customerId": self.customer_id,
                 "accountBranchId": self.branch_id,
+                "accountTypeId": self.account_type_id,
                 "appliedKitta": str(quantity),
                 "crnNumber": self.crn,
                 "transactionPIN": self.pin,
@@ -848,6 +856,7 @@ class Account:
             "branch_id": self.branch_id,
             "customer_id": self.customer_id,
             "bank_id": self.bank_id,
+            "account_type_id": self.account_type_id,
             "portfolio": self.portfolio.to_json(),
             "issues": [issue.to_json() for issue in self.issues or []],
             "tag": self.tag,
@@ -869,6 +878,7 @@ class Account:
             branch_id=json.get("branch_id"),
             customer_id=json.get("customer_id"),
             bank_id=json.get("bank_id"),
+            account_type_id=json.get("account_type_id"),
             portfolio=Portfolio.from_json(json.get("portfolio") or {}),
             issues=[Issue.from_json(issue) for issue in json.get("issues") or []],
             tag=json.get("tag"),
