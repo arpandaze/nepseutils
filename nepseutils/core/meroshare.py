@@ -3,7 +3,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
 
 import requests
 from cryptography.fernet import Fernet
@@ -23,8 +22,8 @@ DEFAULT_CONFIG_FILENAME = "config.json"
 
 
 class MeroShare:
-    _accounts: List[Account]
-    tag_selections: List[str]
+    _accounts: list[Account]
+    tag_selections: list[str]
     password: str
     capitals: dict
     config_version: str
@@ -38,24 +37,20 @@ class MeroShare:
     logging_handler: TelegramLoggingHandler
 
     @property
-    def accounts(self) -> List[Account]:
+    def accounts(self) -> list[Account]:
         if self.tag_selections != []:
-            return [
-                account
-                for account in self._accounts
-                if account.tag in self.tag_selections
-            ]
+            return [account for account in self._accounts if account.tag in self.tag_selections]
         else:
             return self._accounts
 
     def __init__(
         self,
         fernet: Fernet,
-        accounts: Optional[List[Account]],
-        capitals: Optional[dict],
+        accounts: list[Account] | None,
+        capitals: dict | None,
         config_version: str = __version__,
         logging_level: int = logging.ERROR,
-        config_path: Optional[Path] = None,
+        config_path: Path | None = None,
         telegram_bot_token: str | None = None,
         telegram_chat_id: str | None = None,
     ):
@@ -66,9 +61,7 @@ class MeroShare:
         self.telegram_chat_id = telegram_chat_id
 
         if telegram_bot_token and telegram_chat_id:
-            self.logging_handler = TelegramLoggingHandler(
-                telegram_bot_token, telegram_chat_id
-            )
+            self.logging_handler = TelegramLoggingHandler(telegram_bot_token, telegram_chat_id)
             logging.basicConfig(
                 format="%(asctime)s %(message)s",
                 level=self.logging_level,
@@ -140,7 +133,7 @@ class MeroShare:
             )
 
     @staticmethod
-    def new(password: str, path: Optional[Path] = None):
+    def new(password: str, path: Path | None = None):
         path = path or MeroShare.default_config_path()
 
         if path.exists():
@@ -169,7 +162,7 @@ class MeroShare:
         return ms
 
     @staticmethod
-    def load(password: str, path: Optional[Path] = None):
+    def load(password: str, path: Path | None = None):
         path = path or MeroShare.default_config_path()
 
         with open(path, "r") as config_file:
@@ -197,9 +190,7 @@ class MeroShare:
                 telegram_bot_token=telegram_bot_token,
                 telegram_chat_id=telegram_chat_id,
             )
-            accounts = [
-                Account.from_json(account, ms.save_data) for account in accounts
-            ]
+            accounts = [Account.from_json(account, ms.save_data) for account in accounts]
 
             ms._accounts = accounts
 
@@ -232,9 +223,7 @@ class MeroShare:
     @property
     def default_account(self) -> Account:
         if not self.accounts:
-            logging.error(
-                "Cannot choose default account since no account has been added!."
-            )
+            logging.error("Cannot choose default account since no account has been added!.")
             raise ValueError("No accounts found.")
 
         return self.accounts[0]

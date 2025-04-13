@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Callable
-from typing import List, Optional
 
 import requests
 from tenacity import retry
@@ -17,27 +16,26 @@ from .portfolio import Portfolio, PortfolioEntry
 
 
 class Account:
-    save: Callable
     dmat: str
     password: str
     pin: int
-    crn: Optional[str]
-    username: Optional[int] = None
-    name: Optional[str] = None
-    dpid: Optional[str] = None
-    account: Optional[str] = None
-    capital_id: Optional[int] = None
-    branch_id: Optional[str] = None
-    customer_id: Optional[str] = None
-    bank_id: Optional[str] = None
-    account_type_id: Optional[str] = None
+    crn: str | None
+    username: int | None = None
+    name: str | None = None
+    dpid: str | None = None
+    account: str | None = None
+    capital_id: int | None = None
+    branch_id: str | None = None
+    customer_id: str | None = None
+    bank_id: str | None = None
+    account_type_id: str | None = None
 
-    auth_token: Optional[str] = None
+    auth_token: str | None = None
 
     portfolio: Portfolio
-    issues: List[Issue]
+    issues: list[Issue]
 
-    tag: Optional[str]
+    tag: str | None
 
     save: Callable = lambda: None
 
@@ -47,21 +45,20 @@ class Account:
         password: str,
         pin: int,
         capital_id: int,
-        crn: Optional[str],
-        username: Optional[int] = None,
-        name: Optional[str] = None,
-        dpid: Optional[str] = None,
-        account: Optional[str] = None,
-        branch_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        bank_id: Optional[str] = None,
-        account_type_id: Optional[str] = None,
-        portfolio: Optional[Portfolio] = None,
-        issues: Optional[List[Issue]] = None,
-        tag: Optional[str] = None,
-        save: Optional[Callable] = None,
-        __auth_token: Optional[str] = None,
+        crn: str | None,
+        username: int | None = None,
+        name: str | None = None,
+        dpid: str | None = None,
+        account: str | None = None,
+        branch_id: str | None = None,
+        customer_id: str | None = None,
+        bank_id: str | None = None,
+        account_type_id: str | None = None,
+        portfolio: Portfolio | None = None,
+        issues: list[Issue] | None = None,
+        tag: str | None = None,
         send_telegram_message: Callable = lambda *args, **kwargs: None,
+        save: Callable | None = None,
     ):
         self.send_telegram_message = send_telegram_message
         self.dmat = dmat
@@ -103,9 +100,7 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def login(self) -> str:
-        assert (
-            self.username and self.password and self.dpid
-        ), "Username, password and DPID required!"
+        assert self.username and self.password and self.dpid, "Username, password and DPID required!"
 
         with self.__session as sess:
             data = {
@@ -158,17 +153,13 @@ class Account:
         logging.info(f"Getting details for user: {self.name}")
         with self.__session as sess:
             if (not self.account) or (not self.name):
-                account_details = sess.get(
-                    f"{MS_API_BASE}/meroShareView/myDetail/{self.dmat}"
-                )
+                account_details = sess.get(f"{MS_API_BASE}/meroShareView/myDetail/{self.dmat}")
 
                 if account_details.status_code != 200:
                     logging.warning(
                         f"Failed to get account details!\n Status: {account_details.status_code}\n {account_details.json()}"
                     )
-                    raise LocalException(
-                        f"Failed to get account details for user: {self.name}!"
-                    )
+                    raise LocalException(f"Failed to get account details for user: {self.name}!")
 
                 account_details = account_details.json()
 
@@ -183,9 +174,7 @@ class Account:
                         logging.warning(
                             f"Failed to get bank details!\n Status: {bank_req.status_code}\n {bank_req.json()}"
                         )
-                        raise LocalException(
-                            f"Failed to get bank details for user: {self.name}!"
-                        )
+                        raise LocalException(f"Failed to get bank details for user: {self.name}!")
 
                     bank_req = bank_req.json()
 
@@ -200,26 +189,20 @@ class Account:
                     logging.warning(
                         f"Failed to get bank details for account {self.name}!\n Status: {bank_req.status_code}\n {bank_req.json()}"
                     )
-                    raise LocalException(
-                        f"Failed to get bank details for user: {self.name}!"
-                    )
+                    raise LocalException(f"Failed to get bank details for user: {self.name}!")
 
                 bank_req = bank_req.json()
 
                 self.bank_id = bank_req[0].get("id")
 
             if (not self.branch_id) or (not self.customer_id) or (not self.account_type_id):
-                bank_specific_req = sess.get(
-                    f"{MS_API_BASE}/meroShare/bank/{self.bank_id}"
-                )
+                bank_specific_req = sess.get(f"{MS_API_BASE}/meroShare/bank/{self.bank_id}")
 
                 if bank_specific_req.status_code != 200:
                     logging.warning(
                         f"Failed to get bank specific details for account {self.name}!\n Status: {bank_specific_req.status_code}\n {bank_specific_req.json()}"
                     )
-                    raise LocalException(
-                        f"Failed to get bank specific details for user: {self.name}!"
-                    )
+                    raise LocalException(f"Failed to get bank specific details for user: {self.name}!")
 
                 bank_specific_response_json = bank_specific_req.json()[0]
 
@@ -332,9 +315,7 @@ class Account:
                 logging.warning(
                     f"Applicable issues request failed for user: {self.name}\n {issue_req.content}"
                 )
-                raise LocalException(
-                    f"Applicable issues request failed for user: {self.name}!"
-                )
+                raise LocalException(f"Applicable issues request failed for user: {self.name}!")
 
             return issue_req.json().get("object")
 
@@ -400,9 +381,7 @@ class Account:
                 logging.warning(
                     f"Recent application list request failed for user: {self.name}\n {recent_applied_req.content}"
                 )
-                raise LocalException(
-                    f"Recent application list request failed for user: {self.name}!"
-                )
+                raise LocalException(f"Recent application list request failed for user: {self.name}!")
 
             return recent_applied_req.json().get("object")
 
@@ -478,9 +457,7 @@ class Account:
         if company_id is None:
             issues = self.issues
         else:
-            issues = [
-                issue for issue in self.issues if issue.company_share_id == company_id
-            ]
+            issues = [issue for issue in self.issues if issue.company_share_id == company_id]
 
         for issue in issues:
             # Skip if allotion status already fetched
@@ -489,9 +466,7 @@ class Account:
 
             with self.__session as sess:
                 if not issue.old:
-                    logging.info(
-                        f"Fetching application status of issue {issue.symbol} for user: {self.name}"
-                    )
+                    logging.info(f"Fetching application status of issue {issue.symbol} for user: {self.name}")
                     details_req = sess.get(
                         f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{issue.applicant_form_id}",
                     )
@@ -529,9 +504,7 @@ class Account:
                 else:
                     issue.alloted = None
 
-                issue.alloted_quantity = (
-                    details.get("receivedKitta") if issue.alloted else 0
-                )
+                issue.alloted_quantity = details.get("receivedKitta") if issue.alloted else 0
 
                 issue.applied_date = details.get("appliedDate")
                 issue.applied_quantity = details.get("appliedKitta")
@@ -546,9 +519,7 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
-    def fetch_application_status(
-        self, form_id: Optional[int] = None, share_id: Optional[int] = None
-    ) -> dict:
+    def fetch_application_status(self, form_id: int | None = None, share_id: int | None = None) -> dict:
         with self.__session as sess:
             if not form_id:
                 recent_applied_response_json = self.fetch_application_reports()
@@ -575,9 +546,7 @@ class Account:
                 logging.warning(
                     f"Application status request failed for user: {self.name}\n {details_req.content}"
                 )
-                raise LocalException(
-                    f"Application status request failed for user: {self.name}!"
-                )
+                raise LocalException(f"Application status request failed for user: {self.name}!")
 
             details_response_json = details_req.json()
 
@@ -605,14 +574,12 @@ class Account:
             )
 
             if portfolio_req.status_code != 200:
-                logging.warning(
-                    f"Portfolio request failed for user: {self.name}\n {portfolio_req.content}"
-                )
+                logging.warning(f"Portfolio request failed for user: {self.name}\n {portfolio_req.content}")
                 raise LocalException(f"Portfolio request failed for user: {self.name}!")
 
             portfolio_response_json = portfolio_req.json()
 
-            entries: List[PortfolioEntry] = []
+            entries: list[PortfolioEntry] = []
 
             for entry in portfolio_response_json.get("meroShareMyPortfolio"):
                 entries.append(
@@ -622,12 +589,8 @@ class Account:
                         previous_closing_price=float(entry.get("previousClosingPrice")),
                         script=entry.get("script"),
                         script_desc=entry.get("scriptDesc"),
-                        value_as_of_last_transaction_price=float(
-                            entry.get("valueAsOfLastTransactionPrice")
-                        ),
-                        value_as_of_previous_closing_price=float(
-                            entry.get("valueAsOfPreviousClosingPrice")
-                        ),
+                        value_as_of_last_transaction_price=float(entry.get("valueAsOfLastTransactionPrice")),
+                        value_as_of_previous_closing_price=float(entry.get("valueAsOfPreviousClosingPrice")),
                     )
                 )
 
@@ -662,9 +625,7 @@ class Account:
                 logging.warning(
                     f"Min apply unit request failed for user: {self.name}\n {min_apply_unit_req.content}"
                 )
-                raise LocalException(
-                    f"Min apply unit request failed for user: {self.name}!"
-                )
+                raise LocalException(f"Min apply unit request failed for user: {self.name}!")
 
             min_apply_unit_response_json = min_apply_unit_req.json()
 
@@ -746,7 +707,7 @@ class Account:
 
             for item in details_json.get("object"):
                 logging.info(
-                    f'Script: {item.get("contract").get("obligation").get("scriptCode")}, Status: {item.get("statusName")}, for account: {self.name}'
+                    f"Script: {item.get('contract').get('obligation').get('scriptCode')}, Status: {item.get('statusName')}, for account: {self.name}"
                 )
 
             return details_json.get("object")
@@ -776,9 +737,7 @@ class Account:
         with self.__session as sess:
             issue_to_apply = None
 
-            logging.info(
-                f"Applying {quantity} units of {share_id} for user: {self.name}"
-            )
+            logging.info(f"Applying {quantity} units of {share_id} for user: {self.name}")
 
             applicable_issue = self.fetch_applicable_issues()
 
@@ -787,15 +746,11 @@ class Account:
                     issue_to_apply = issue
 
             if not issue_to_apply:
-                logging.warning(
-                    "Provided ID doesn't match any of the applicable issues!"
-                )
+                logging.warning("Provided ID doesn't match any of the applicable issues!")
                 raise GlobalError("No matching applicable issues!")
 
             if issue_to_apply.get("action"):
-                logging.warning(
-                    f"Issue already applied! {issue_to_apply} for user: {self.name}"
-                )
+                logging.warning(f"Issue already applied! {issue_to_apply} for user: {self.name}")
                 return {
                     "status": "CREATED",
                     "message": "Issue already applied!",
@@ -834,9 +789,7 @@ class Account:
                 )
                 raise LocalException(f"Apply failed for user {self.name}!")
 
-            logging.info(
-                f"Applied {quantity} kitta of {issue_to_apply.get('companyName')} for {self.name}!"
-            )
+            logging.info(f"Applied {quantity} kitta of {issue_to_apply.get('companyName')} for {self.name}!")
 
             self.fetch_applied_issues()
 
