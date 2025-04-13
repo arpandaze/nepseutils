@@ -1,6 +1,3 @@
-from typing import Optional
-
-
 class Issue:
     name: str
     symbol: str
@@ -8,13 +5,13 @@ class Issue:
     share_type: str
     company_share_id: str
     applicant_form_id: str
-    alloted: Optional[bool]
-    alloted_quantity: Optional[float]
-    applied_date: Optional[str]
-    applied_quantity: Optional[float]
-    applied_amount: Optional[float]
-    block_amount_status: Optional[str]
-    old: Optional[bool] = None
+    alloted: bool | None
+    alloted_quantity: float | None
+    applied_date: str | None
+    applied_quantity: float | None
+    applied_amount: float | None
+    block_amount_status: str | None
+    old: bool | None = None
 
     def __init__(
         self,
@@ -24,13 +21,13 @@ class Issue:
         share_type: str,
         company_share_id: str,
         applicant_form_id: str,
-        alloted: Optional[bool] = None,
-        alloted_quantity: Optional[float] = None,
-        applied_date: Optional[str] = None,
-        applied_quantity: Optional[float] = None,
-        applied_amount: Optional[float] = None,
-        block_amount_status: Optional[str] = None,
-        old: Optional[bool] = None,
+        alloted: bool | None = None,
+        alloted_quantity: float | None = None,
+        applied_date: str | None = None,
+        applied_quantity: float | None = None,
+        applied_amount: float | None = None,
+        block_amount_status: str | None = None,
+        old: bool | None = None,
     ) -> None:
         self.name = name
         self.symbol = symbol

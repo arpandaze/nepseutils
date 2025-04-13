@@ -1,6 +1,3 @@
-from typing import List
-
-
 class PortfolioEntry:
     current_balance: float
     last_transaction_price: float
@@ -53,7 +50,7 @@ class PortfolioEntry:
 
 
 class Portfolio:
-    entries: List[PortfolioEntry]
+    entries: list[PortfolioEntry]
 
     total_items: int
     total_value_as_of_last_transaction_price: float
@@ -61,7 +58,7 @@ class Portfolio:
 
     def __init__(
         self,
-        entries: List[PortfolioEntry],
+        entries: list[PortfolioEntry],
         total_items: int,
         total_value_as_of_last_transaction_price: float,
         total_value_as_of_previous_closing_price: float,

@@ -5,7 +5,6 @@ import logging
 import os
 from cmd import Cmd
 from getpass import getpass
-from typing import List
 
 from cryptography.fernet import InvalidToken
 from tabulate import tabulate
@@ -169,7 +168,7 @@ class NepseUtils(Cmd):
         print("Usage: portfolio all")
 
     def do_portfolio(self, args):
-        portfolio: List[PortfolioEntry] = []
+        portfolio: list[PortfolioEntry] = []
 
         if args == "all":
             for account in self.ms.accounts:

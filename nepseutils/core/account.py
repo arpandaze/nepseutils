@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Callable
-from typing import List, Optional
 
 import requests
 from tenacity import retry
@@ -17,27 +16,26 @@ from .portfolio import Portfolio, PortfolioEntry
 
 
 class Account:
-    save: Callable
     dmat: str
     password: str
     pin: int
-    crn: Optional[str]
-    username: Optional[int] = None
-    name: Optional[str] = None
-    dpid: Optional[str] = None
-    account: Optional[str] = None
-    capital_id: Optional[int] = None
-    branch_id: Optional[str] = None
-    customer_id: Optional[str] = None
-    bank_id: Optional[str] = None
-    account_type_id: Optional[str] = None
+    crn: str | None
+    username: int | None = None
+    name: str | None = None
+    dpid: str | None = None
+    account: str | None = None
+    capital_id: int | None = None
+    branch_id: str | None = None
+    customer_id: str | None = None
+    bank_id: str | None = None
+    account_type_id: str | None = None
 
-    auth_token: Optional[str] = None
+    auth_token: str | None = None
 
     portfolio: Portfolio
-    issues: List[Issue]
+    issues: list[Issue]
 
-    tag: Optional[str]
+    tag: str | None
 
     save: Callable = lambda: None
 
@@ -47,21 +45,20 @@ class Account:
         password: str,
         pin: int,
         capital_id: int,
-        crn: Optional[str],
-        username: Optional[int] = None,
-        name: Optional[str] = None,
-        dpid: Optional[str] = None,
-        account: Optional[str] = None,
-        branch_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        bank_id: Optional[str] = None,
-        account_type_id: Optional[str] = None,
-        portfolio: Optional[Portfolio] = None,
-        issues: Optional[List[Issue]] = None,
-        tag: Optional[str] = None,
-        save: Optional[Callable] = None,
-        __auth_token: Optional[str] = None,
+        crn: str | None,
+        username: int | None = None,
+        name: str | None = None,
+        dpid: str | None = None,
+        account: str | None = None,
+        branch_id: str | None = None,
+        customer_id: str | None = None,
+        bank_id: str | None = None,
+        account_type_id: str | None = None,
+        portfolio: Portfolio | None = None,
+        issues: list[Issue] | None = None,
+        tag: str | None = None,
         send_telegram_message: Callable = lambda *args, **kwargs: None,
+        save: Callable | None = None,
     ):
         self.send_telegram_message = send_telegram_message
         self.dmat = dmat
@@ -522,7 +519,7 @@ class Account:
         reraise=True,
         retry=retry_if_exception_type(LocalException),
     )
-    def fetch_application_status(self, form_id: Optional[int] = None, share_id: Optional[int] = None) -> dict:
+    def fetch_application_status(self, form_id: int | None = None, share_id: int | None = None) -> dict:
         with self.__session as sess:
             if not form_id:
                 recent_applied_response_json = self.fetch_application_reports()
@@ -582,7 +579,7 @@ class Account:
 
             portfolio_response_json = portfolio_req.json()
 
-            entries: List[PortfolioEntry] = []
+            entries: list[PortfolioEntry] = []
 
             for entry in portfolio_response_json.get("meroShareMyPortfolio"):
                 entries.append(
