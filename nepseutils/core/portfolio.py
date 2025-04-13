@@ -68,12 +68,8 @@ class Portfolio:
     ) -> None:
         self.entries = entries
         self.total_items = total_items
-        self.total_value_as_of_last_transaction_price = (
-            total_value_as_of_last_transaction_price
-        )
-        self.total_value_as_of_previous_closing_price = (
-            total_value_as_of_previous_closing_price
-        )
+        self.total_value_as_of_last_transaction_price = total_value_as_of_last_transaction_price
+        self.total_value_as_of_previous_closing_price = total_value_as_of_previous_closing_price
 
     def to_json(self):
         return {

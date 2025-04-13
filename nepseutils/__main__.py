@@ -151,8 +151,7 @@ class NepseUtils(Cmd):
         headers = ["ID", "Scrip", "Name"]
 
         table = [
-            [itm.get("companyShareId"), itm.get("scrip"), itm.get("companyName")]
-            for itm in results[::-1]
+            [itm.get("companyShareId"), itm.get("scrip"), itm.get("companyName")] for itm in results[::-1]
         ]
 
         print(tabulate(table, headers=headers, tablefmt="pretty"))
@@ -231,13 +230,24 @@ class NepseUtils(Cmd):
                 f"{itm.value_as_of_previous_closing_price:,.1f}",
                 f"{itm.value_as_of_last_transaction_price:,.1f}",
                 f"{itm.value_as_of_last_transaction_price - itm.value_as_of_previous_closing_price:,.1f}",
-                f"{(itm.value_as_of_last_transaction_price - itm.value_as_of_previous_closing_price)/itm.value_as_of_previous_closing_price*100:,.2f}%",
+                f"{(itm.value_as_of_last_transaction_price - itm.value_as_of_previous_closing_price) / itm.value_as_of_previous_closing_price * 100:,.2f}%",
             ]
             for itm in portfolio
         ]
         total_diff = total_value - total_value_as_of_closing
         total_diff_percent = total_diff / total_value_as_of_closing * 100
-        table.append(["Total", "", "","",f"{total_value_as_of_closing:,.1f}", f"{total_value:,.1f}", f"{total_diff:,.1f}", f"{total_diff_percent:,.2f}%"])
+        table.append(
+            [
+                "Total",
+                "",
+                "",
+                "",
+                f"{total_value_as_of_closing:,.1f}",
+                f"{total_value:,.1f}",
+                f"{total_diff:,.1f}",
+                f"{total_diff_percent:,.2f}%",
+            ]
+        )
         print(tabulate(table, headers=headers, tablefmt="pretty"))
 
     def help_list(self):
@@ -333,7 +343,7 @@ class NepseUtils(Cmd):
                     account_alloted,
                     account_units_alloted,
                     account_amount_alloted,
-                    f"{account_alloted/account_applied*100:.2f}%",
+                    f"{account_alloted / account_applied * 100:.2f}%",
                 ]
             )
 
@@ -342,9 +352,7 @@ class NepseUtils(Cmd):
         total_alloted = sum([itm[3] for itm in table])
         total_units_alloted = sum([itm[4] for itm in table])
         total_amount_alloted = sum([itm[5] for itm in table])
-        total_percent_alloted = (
-            total_alloted / total_applied * 100 if total_applied > 0 else 0.0
-        )
+        total_percent_alloted = total_alloted / total_applied * 100 if total_applied > 0 else 0.0
 
         table.append(
             [
@@ -454,9 +462,7 @@ class NepseUtils(Cmd):
                 appicable_issues = account.fetch_applicable_issues()
 
             try:
-                result = account.apply(
-                    share_id=int(company_to_apply), quantity=int(quantity)
-                )
+                result = account.apply(share_id=int(company_to_apply), quantity=int(quantity))
             except Exception as e:
                 print(e)
                 print(f"Failed to apply for {account.name}!")
@@ -504,9 +510,7 @@ class NepseUtils(Cmd):
 
             form_id = None
             for forms in reports:
-                if forms.get("companyShareId") == int(company_share_id) and forms.get(
-                    "applicantFormId"
-                ):
+                if forms.get("companyShareId") == int(company_share_id) and forms.get("applicantFormId"):
                     form_id = forms.get("applicantFormId")
                     break
 
@@ -543,9 +547,7 @@ class NepseUtils(Cmd):
             account_id = input("Choose an account ID: ")
             account = self.ms.accounts[int(account_id) - 1]
 
-            new_password = getpass(
-                prompt=f"Enter new password for account {account.name}: "
-            )
+            new_password = getpass(prompt=f"Enter new password for account {account.name}: ")
 
             if len(new_password) < 8:
                 print("Password too short!")
