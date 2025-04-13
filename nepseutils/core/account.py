@@ -103,9 +103,9 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def login(self) -> str:
-        assert (
-            self.username and self.password and self.dpid
-        ), "Username, password and DPID required!"
+        assert self.username and self.password and self.dpid, (
+            "Username, password and DPID required!"
+        )
 
         with self.__session as sess:
             data = {
@@ -208,7 +208,11 @@ class Account:
 
                 self.bank_id = bank_req[0].get("id")
 
-            if (not self.branch_id) or (not self.customer_id) or (not self.account_type_id):
+            if (
+                (not self.branch_id)
+                or (not self.customer_id)
+                or (not self.account_type_id)
+            ):
                 bank_specific_req = sess.get(
                     f"{MS_API_BASE}/meroShare/bank/{self.bank_id}"
                 )
@@ -230,7 +234,9 @@ class Account:
                     self.customer_id = bank_specific_response_json.get("id")
 
                 if not self.account_type_id:
-                    self.account_type_id = bank_specific_response_json.get("accountTypeId")
+                    self.account_type_id = bank_specific_response_json.get(
+                        "accountTypeId"
+                    )
 
         return {
             "dmat": self.dmat,
@@ -746,7 +752,7 @@ class Account:
 
             for item in details_json.get("object"):
                 logging.info(
-                    f'Script: {item.get("contract").get("obligation").get("scriptCode")}, Status: {item.get("statusName")}, for account: {self.name}'
+                    f"Script: {item.get('contract').get('obligation').get('scriptCode')}, Status: {item.get('statusName')}, for account: {self.name}"
                 )
 
             return details_json.get("object")

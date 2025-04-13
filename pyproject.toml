@@ -1,36 +1,53 @@
-[tool.poetry]
+[project]
 name = "nepseutils"
 version = "0.4.7"
 description = "Collection of scripts to interact with NEPSE related websites!"
-authors = ["Daze <dazehere@yandex.com>"]
-repository = "https://github.com/arpandaze/nepseutils"
+authors = [
+    {name = "Arpan Koirala", email = "arpandaze@gmail.com"}
+]
 readme = "README.md"
-keywords = ["nepse","meroshare","tms"]
+requires-python = ">=3.9"
+keywords = ["nepse", "meroshare", "tms"]
+dependencies = [
+    "requests>=2.31.0",
+    "tenacity>=8.2.2",
+    "cryptography>=41.0.1",
+    "tabulate>=0.9.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-requests = "^2.31.0"
-tenacity = "^8.2.2"
-cryptography = "^41.0.1"
-tabulate = "^0.9.0"
+[dependency-groups]
+dev = [
+    "pytest>=7.3.2",
+    "pylint>=2.17.4",
+    "black>=23.3.0", 
+    "jedi>=0.18.2",
+    "isort>=5.12.0",
+    "rope>=1.8.0",
+    "flake8>=6.0.0",
+]
 
-[tool.poetry.dev-dependencies]
-pytest = "^7.3.2"
-pylint = "^2.17.4"
-black = "^23.3.0"
-jedi = "^0.18.2"
-isort = "^5.12.0"
-rope = "^1.8.0"
-flake8 = "^6.0.0"
+[project.urls]
+Repository = "https://github.com/arpandaze/nepseutils"
 
-[tool.poetry.scripts]
+[project.scripts]
 nepseutils = "nepseutils.__main__:main"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[[tool.poetry_bumpversion.replacements]]
-files = ["tests/test_nepseutils.py"]
-search = 'assert __version__ == "{current_version}"'
-replace = 'assert __version__ == "{new_version}"'
+[tool.hatch.build.targets.wheel]
+packages = ["nepseutils"]
+
+[tool.hatch.version]
+path = "nepseutils/version.py"
+
+[tool.pytest]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
