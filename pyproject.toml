@@ -1,6 +1,6 @@
 [project]
 name = "nepseutils"
-version = "0.4.7"
+version = "0.4.8"
 description = "Collection of scripts to interact with NEPSE related websites!"
 authors = [
     {name = "Arpan Koirala", email = "arpandaze@gmail.com"}
