@@ -57,8 +57,9 @@ class Account:
         portfolio: Portfolio | None = None,
         issues: list[Issue] | None = None,
         tag: str | None = None,
-        send_telegram_message: Callable = lambda *args, **kwargs: None,
         save: Callable | None = None,
+        __auth_token: str | None = None,
+        send_telegram_message: Callable = lambda *args, **kwargs: None,
     ):
         self.send_telegram_message = send_telegram_message
         self.dmat = dmat
@@ -102,45 +103,42 @@ class Account:
     def login(self) -> str:
         assert self.username and self.password and self.dpid, "Username, password and DPID required!"
 
-        with self.__session as sess:
-            data = {
-                "clientId": str(self.capital_id),
-                "username": self.username,
-                "password": self.password,
-            }
+        data = {
+            "clientId": str(self.capital_id),
+            "username": self.username,
+            "password": self.password,
+        }
 
-            headers = {
-                "Authorization": "null",
-                "Content-Type": "application/json",
-            }
-            sess.headers.update(headers)
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = "null"
+        headers["Content-Type"] = "application/json"
 
-            login_req = sess.post(f"{MS_API_BASE}/meroShare/auth/", json=data)
+        login_req = requests.post(f"{MS_API_BASE}/meroShare/auth/", json=data, headers=headers)
 
-            response_data = login_req.json()
+        response_data = login_req.json()
 
-            if login_req.status_code != 200:
-                logging.error(
-                    f"Login failed for user: {self.name}! \n Status: {login_req.status_code} \n {response_data}"
-                )
-                raise LocalException(f"Login failed for user: {self.name}!")
+        if login_req.status_code != 200:
+            logging.error(
+                f"Login failed for user: {self.name}! \n Status: {login_req.status_code} \n {response_data}"
+            )
+            raise LocalException(f"Login failed for user: {self.name}!")
 
-            if response_data.get("passwordExpired"):
-                logging.error(f"Password has expired for user: {self.name}")
-                raise LocalException(f"Password has expired for user: {self.name}")
+        if response_data.get("passwordExpired"):
+            logging.error(f"Password has expired for user: {self.name}")
+            raise LocalException(f"Password has expired for user: {self.name}")
 
-            if response_data.get("accountExpired"):
-                logging.error(f"Account has expired for user: {self.name}")
-                raise LocalException(f"Account has expired for user: {self.name}")
+        if response_data.get("accountExpired"):
+            logging.error(f"Account has expired for user: {self.name}")
+            raise LocalException(f"Account has expired for user: {self.name}")
 
-            if response_data.get("dematExpired"):
-                logging.error(f"DMAT has expired for user: {self.name}")
-                raise LocalException(f"DMAT has expired for user: {self.name}")
+        if response_data.get("dematExpired"):
+            logging.error(f"DMAT has expired for user: {self.name}")
+            raise LocalException(f"DMAT has expired for user: {self.name}")
 
-            self.auth_token = login_req.headers.get("Authorization")
-            self.__session.headers.update({"Authorization": self.auth_token})  # type: ignore
+        self.auth_token = login_req.headers.get("Authorization")
+        self.__session.headers.update({"Authorization": self.auth_token})  # type: ignore
 
-            return self.auth_token  # type: ignore
+        return self.auth_token  # type: ignore
 
     @login_required
     @retry(
@@ -151,69 +149,72 @@ class Account:
     )
     def get_details(self) -> dict:
         logging.info(f"Getting details for user: {self.name}")
-        with self.__session as sess:
-            if (not self.account) or (not self.name):
-                account_details = sess.get(f"{MS_API_BASE}/meroShareView/myDetail/{self.dmat}")
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        
+        if (not self.account) or (not self.name):
+            account_details = requests.get(f"{MS_API_BASE}/meroShareView/myDetail/{self.dmat}", headers=headers)
 
-                if account_details.status_code != 200:
-                    logging.warning(
-                        f"Failed to get account details!\n Status: {account_details.status_code}\n {account_details.json()}"
-                    )
-                    raise LocalException(f"Failed to get account details for user: {self.name}!")
-
-                account_details = account_details.json()
-
-                if not self.name:
-                    self.name = account_details.get("name")
-
-                if not self.account:
-                    bank_code = account_details.get("bankCode")
-                    bank_req = sess.get(f"{MS_API_BASE}/bankRequest/{bank_code}")
-
-                    if bank_req.status_code != 200:
-                        logging.warning(
-                            f"Failed to get bank details!\n Status: {bank_req.status_code}\n {bank_req.json()}"
-                        )
-                        raise LocalException(f"Failed to get bank details for user: {self.name}!")
-
-                    bank_req = bank_req.json()
-
-                    self.account = bank_req.get("accountNumber")
-
-            if not self.bank_id:
-                bank_req = sess.get(
-                    f"{MS_API_BASE}/meroShare/bank/",
+            if account_details.status_code != 200:
+                logging.warning(
+                    f"Failed to get account details!\n Status: {account_details.status_code}\n {account_details.json()}"
                 )
+                raise LocalException(f"Failed to get account details for user: {self.name}!")
+
+            account_details = account_details.json()
+
+            if not self.name:
+                self.name = account_details.get("name")
+
+            if not self.account:
+                bank_code = account_details.get("bankCode")
+                bank_req = requests.get(f"{MS_API_BASE}/bankRequest/{bank_code}", headers=headers)
 
                 if bank_req.status_code != 200:
                     logging.warning(
-                        f"Failed to get bank details for account {self.name}!\n Status: {bank_req.status_code}\n {bank_req.json()}"
+                        f"Failed to get bank details!\n Status: {bank_req.status_code}\n {bank_req.json()}"
                     )
                     raise LocalException(f"Failed to get bank details for user: {self.name}!")
 
                 bank_req = bank_req.json()
 
-                self.bank_id = bank_req[0].get("id")
+                self.account = bank_req.get("accountNumber")
 
-            if (not self.branch_id) or (not self.customer_id) or (not self.account_type_id):
-                bank_specific_req = sess.get(f"{MS_API_BASE}/meroShare/bank/{self.bank_id}")
+        if not self.bank_id:
+            bank_req = requests.get(
+                f"{MS_API_BASE}/meroShare/bank/",
+                headers=headers
+            )
 
-                if bank_specific_req.status_code != 200:
-                    logging.warning(
-                        f"Failed to get bank specific details for account {self.name}!\n Status: {bank_specific_req.status_code}\n {bank_specific_req.json()}"
-                    )
-                    raise LocalException(f"Failed to get bank specific details for user: {self.name}!")
+            if bank_req.status_code != 200:
+                logging.warning(
+                    f"Failed to get bank details for account {self.name}!\n Status: {bank_req.status_code}\n {bank_req.json()}"
+                )
+                raise LocalException(f"Failed to get bank details for user: {self.name}!")
 
-                bank_specific_response_json = bank_specific_req.json()[0]
+            bank_req = bank_req.json()
 
-                if not self.branch_id:
-                    self.branch_id = bank_specific_response_json.get("accountBranchId")
+            self.bank_id = bank_req[0].get("id")
 
-                if not self.customer_id:
-                    self.customer_id = bank_specific_response_json.get("id")
+        if (not self.branch_id) or (not self.customer_id) or (not self.account_type_id):
+            bank_specific_req = requests.get(f"{MS_API_BASE}/meroShare/bank/{self.bank_id}", headers=headers)
 
-                if not self.account_type_id:
-                    self.account_type_id = bank_specific_response_json.get("accountTypeId")
+            if bank_specific_req.status_code != 200:
+                logging.warning(
+                    f"Failed to get bank specific details for account {self.name}!\n Status: {bank_specific_req.status_code}\n {bank_specific_req.json()}"
+                )
+                raise LocalException(f"Failed to get bank specific details for user: {self.name}!")
+
+            bank_specific_response_json = bank_specific_req.json()[0]
+
+            if not self.branch_id:
+                self.branch_id = bank_specific_response_json.get("accountBranchId")
+
+            if not self.customer_id:
+                self.customer_id = bank_specific_response_json.get("id")
+
+            if not self.account_type_id:
+                self.account_type_id = bank_specific_response_json.get("accountTypeId")
 
         return {
             "dmat": self.dmat,
@@ -240,19 +241,21 @@ class Account:
         if not self.auth_token:
             return True
 
-        with self.__session as sess:
-            logout_req = sess.get(
-                f"{MS_API_BASE}/meroShare/auth/logout/",
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        logout_req = requests.get(
+            f"{MS_API_BASE}/meroShare/auth/logout/",
+            headers=headers
+        )
+
+        if logout_req.status_code != 201:
+            logging.warning(
+                f"Logout failed for user : {self.name}\n Status: {logout_req.status_code}\n {logout_req.content}"
             )
+            raise LocalException(f"Logout failed for user: {self.name}!")
 
-            if logout_req.status_code != 201:
-                logging.warning(
-                    f"Logout failed for user : {self.name}\n Status: {logout_req.status_code}\n {logout_req.content}"
-                )
-                raise LocalException(f"Logout failed for user: {self.name}!")
-
-            self.auth_token = None
-            return True
+        self.auth_token = None
+        return True
 
     @autosave
     @login_required
@@ -263,61 +266,60 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def fetch_applicable_issues(self) -> list:
-        with self.__session as sess:
-            data = {
-                "filterFieldParams": [
-                    {
-                        "key": "companyIssue.companyISIN.script",
-                        "alias": "Scrip",
-                    },
-                    {
-                        "key": "companyIssue.companyISIN.company.name",
-                        "alias": "Company Name",
-                    },
-                    {
-                        "key": "companyIssue.assignedToClient.name",
-                        "value": "",
-                        "alias": "Issue Manager",
-                    },
-                ],
-                "page": 1,
-                "size": 10,
-                "searchRoleViewConstants": "VIEW_APPLICABLE_SHARE",
-                "filterDateParams": [
-                    {
-                        "key": "minIssueOpenDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                    {
-                        "key": "maxIssueCloseDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                ],
-            }
+        data = {
+            "filterFieldParams": [
+                {
+                    "key": "companyIssue.companyISIN.script",
+                    "alias": "Scrip",
+                },
+                {
+                    "key": "companyIssue.companyISIN.company.name",
+                    "alias": "Company Name",
+                },
+                {
+                    "key": "companyIssue.assignedToClient.name",
+                    "value": "",
+                    "alias": "Issue Manager",
+                },
+            ],
+            "page": 1,
+            "size": 10,
+            "searchRoleViewConstants": "VIEW_APPLICABLE_SHARE",
+            "filterDateParams": [
+                {
+                    "key": "minIssueOpenDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+                {
+                    "key": "maxIssueCloseDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+            ],
+        }
 
-            headers = {
-                "Content-Type": "application/json",
-            }
-            sess.headers.update(headers)
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        headers["Content-Type"] = "application/json"
 
-            logging.info(f"Fetching applicable issues for user: {self.name}")
+        logging.info(f"Fetching applicable issues for user: {self.name}")
 
-            issue_req = sess.post(
-                f"{MS_API_BASE}/meroShare/companyShare/applicableIssue/",
-                json=data,
+        issue_req = requests.post(
+            f"{MS_API_BASE}/meroShare/companyShare/applicableIssue/",
+            headers=headers,
+            json=data,
+        )
+
+        if issue_req.status_code != 200:
+            logging.warning(
+                f"Applicable issues request failed for user: {self.name}\n {issue_req.content}"
             )
+            raise LocalException(f"Applicable issues request failed for user: {self.name}!")
 
-            if issue_req.status_code != 200:
-                logging.warning(
-                    f"Applicable issues request failed for user: {self.name}\n {issue_req.content}"
-                )
-                raise LocalException(f"Applicable issues request failed for user: {self.name}!")
-
-            return issue_req.json().get("object")
+        return issue_req.json().get("object")
 
     @autosave
     @login_required
@@ -328,62 +330,61 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def fetch_application_reports(self, active=True) -> list:
-        with self.__session as sess:
-            headers = {
-                "Content-Type": "application/json",
-            }
-            sess.headers.update(headers)
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        headers["Content-Type"] = "application/json"
 
-            if active:
-                search_role_view_constants = "VIEW_APPLICANT_FORM_COMPLETE"
-                endpoint = "meroShare/applicantForm/active/search/"
-            else:
-                search_role_view_constants = "VIEW"
-                endpoint = "meroShare/migrated/applicantForm/search/"
+        if active:
+            search_role_view_constants = "VIEW_APPLICANT_FORM_COMPLETE"
+            endpoint = "meroShare/applicantForm/active/search/"
+        else:
+            search_role_view_constants = "VIEW"
+            endpoint = "meroShare/migrated/applicantForm/search/"
 
-            data = {
-                "filterFieldParams": [
-                    {
-                        "key": "companyShare.companyIssue.companyISIN.script",
-                        "alias": "Scrip",
-                    },
-                    {
-                        "key": "companyShare.companyIssue.companyISIN.company.name",
-                        "alias": "Company Name",
-                    },
-                ],
-                "page": 1,
-                "size": 200,
-                "searchRoleViewConstants": search_role_view_constants,
-                "filterDateParams": [
-                    {
-                        "key": "appliedDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                    {
-                        "key": "appliedDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                ],
-            }
+        data = {
+            "filterFieldParams": [
+                {
+                    "key": "companyShare.companyIssue.companyISIN.script",
+                    "alias": "Scrip",
+                },
+                {
+                    "key": "companyShare.companyIssue.companyISIN.company.name",
+                    "alias": "Company Name",
+                },
+            ],
+            "page": 1,
+            "size": 200,
+            "searchRoleViewConstants": search_role_view_constants,
+            "filterDateParams": [
+                {
+                    "key": "appliedDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+                {
+                    "key": "appliedDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+            ],
+        }
 
-            logging.info(f"Fetching application reports for user: {self.name}")
-            recent_applied_req = sess.post(
-                f"{MS_API_BASE}/{endpoint}",
-                json=data,
+        logging.info(f"Fetching application reports for user: {self.name}")
+        recent_applied_req = requests.post(
+            f"{MS_API_BASE}/{endpoint}",
+            json=data,
+            headers=headers
+        )
+
+        if recent_applied_req.status_code != 200:
+            logging.warning(
+                f"Recent application list request failed for user: {self.name}\n {recent_applied_req.content}"
             )
+            raise LocalException(f"Recent application list request failed for user: {self.name}!")
 
-            if recent_applied_req.status_code != 200:
-                logging.warning(
-                    f"Recent application list request failed for user: {self.name}\n {recent_applied_req.content}"
-                )
-                raise LocalException(f"Recent application list request failed for user: {self.name}!")
-
-            return recent_applied_req.json().get("object")
+        return recent_applied_req.json().get("object")
 
     @autosave
     @login_required
@@ -459,58 +460,62 @@ class Account:
         else:
             issues = [issue for issue in self.issues if issue.company_share_id == company_id]
 
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+
         for issue in issues:
             # Skip if allotion status already fetched
             if issue.alloted != None:
                 continue
 
-            with self.__session as sess:
-                if not issue.old:
-                    logging.info(f"Fetching application status of issue {issue.symbol} for user: {self.name}")
-                    details_req = sess.get(
-                        f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{issue.applicant_form_id}",
-                    )
-                else:
-                    logging.info(
-                        f"Fetching application status of issue {issue.symbol} (old) for user: {self.name}"
-                    )
-                    details_req = sess.get(
-                        f"{MS_API_BASE}/meroShare/migrated/applicantForm/report/{issue.applicant_form_id}",
-                    )
+            if not issue.old:
+                logging.info(f"Fetching application status of issue {issue.symbol} for user: {self.name}")
+                details_req = requests.get(
+                    f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{issue.applicant_form_id}",
+                    headers=headers
+                )
+            else:
+                logging.info(
+                    f"Fetching application status of issue {issue.symbol} (old) for user: {self.name}"
+                )
+                details_req = requests.get(
+                    f"{MS_API_BASE}/meroShare/migrated/applicantForm/report/{issue.applicant_form_id}",
+                    headers=headers
+                )
 
-                if details_req.status_code != 200:
-                    logging.warning(
-                        f"Failed to fetch application status of issue {issue.symbol} for user: {self.name}\n {details_req.content} \n {MS_API_BASE}/migrated/applicantForm/report/{issue.applicant_form_id}"
-                    )
-                    continue
+            if details_req.status_code != 200:
+                logging.warning(
+                    f"Failed to fetch application status of issue {issue.symbol} for user: {self.name}\n {details_req.content} \n {MS_API_BASE}/migrated/applicantForm/report/{issue.applicant_form_id}"
+                )
+                continue
 
-                details = details_req.json()
+            details = details_req.json()
 
-                if details.get("statusName") == "Alloted":
-                    logging.info(
-                        f"Application status of issue {issue.symbol} is ALLOTED for user: {self.name}"
-                    )
-                    issue.alloted = True
-                elif details.get("statusName") == "Not Alloted":
-                    logging.info(
-                        f"Application status of issue {issue.symbol} is NOT Alloted for user: {self.name}"
-                    )
-                    issue.alloted = False
-                elif details.get("statusName") == "Rejected":
-                    logging.warn(
-                        f"Application status of issue {issue.symbol} is REJECTED for user: {self.name}"
-                    )
-                    issue.alloted = False
-                else:
-                    issue.alloted = None
+            if details.get("statusName") == "Alloted":
+                logging.info(
+                    f"Application status of issue {issue.symbol} is ALLOTED for user: {self.name}"
+                )
+                issue.alloted = True
+            elif details.get("statusName") == "Not Alloted":
+                logging.info(
+                    f"Application status of issue {issue.symbol} is NOT Alloted for user: {self.name}"
+                )
+                issue.alloted = False
+            elif details.get("statusName") == "Rejected":
+                logging.warn(
+                    f"Application status of issue {issue.symbol} is REJECTED for user: {self.name}"
+                )
+                issue.alloted = False
+            else:
+                issue.alloted = None
 
-                issue.alloted_quantity = details.get("receivedKitta") if issue.alloted else 0
+            issue.alloted_quantity = details.get("receivedKitta") if issue.alloted else 0
 
-                issue.applied_date = details.get("appliedDate")
-                issue.applied_quantity = details.get("appliedKitta")
-                issue.applied_amount = details.get("amount")
-                issue.block_amount_status = details.get("meroshareRemark")
-                self.save()
+            issue.applied_date = details.get("appliedDate")
+            issue.applied_quantity = details.get("appliedKitta")
+            issue.applied_amount = details.get("amount")
+            issue.block_amount_status = details.get("meroshareRemark")
+            self.save()
 
     @login_required
     @retry(
@@ -520,37 +525,39 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def fetch_application_status(self, form_id: int | None = None, share_id: int | None = None) -> dict:
-        with self.__session as sess:
-            if not form_id:
-                recent_applied_response_json = self.fetch_application_reports()
+        if not form_id:
+            recent_applied_response_json = self.fetch_application_reports()
 
-                target_issue = None
+            target_issue = None
 
-                for issue in recent_applied_response_json:
-                    if issue.get("companyShareId") == share_id:
-                        target_issue = issue
-                        form_id = target_issue.get("applicantFormId")
-                        break
+            for issue in recent_applied_response_json:
+                if issue.get("companyShareId") == share_id:
+                    target_issue = issue
+                    form_id = target_issue.get("applicantFormId")
+                    break
 
-            if not form_id:
-                logging.critical(
-                    f"No issue with provided id found in recent application history for user: {self.name}"
-                )
-                raise LocalException("Issue not found!")
-
-            details_req = sess.get(
-                f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{form_id}",
+        if not form_id:
+            logging.critical(
+                f"No issue with provided id found in recent application history for user: {self.name}"
             )
+            raise LocalException("Issue not found!")
 
-            if details_req.status_code != 200:
-                logging.warning(
-                    f"Application status request failed for user: {self.name}\n {details_req.content}"
-                )
-                raise LocalException(f"Application status request failed for user: {self.name}!")
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        details_req = requests.get(
+            f"{MS_API_BASE}/meroShare/applicantForm/report/detail/{form_id}",
+            headers=headers
+        )
 
-            details_response_json = details_req.json()
+        if details_req.status_code != 200:
+            logging.warning(
+                f"Application status request failed for user: {self.name}\n {details_req.content}"
+            )
+            raise LocalException(f"Application status request failed for user: {self.name}!")
 
-            return details_response_json
+        details_response_json = details_req.json()
+
+        return details_response_json
 
     @login_required
     @retry(
@@ -560,53 +567,57 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def fetch_portfolio(self) -> Portfolio:
-        with self.__session as sess:
-            portfolio_req = sess.post(
-                f"{MS_API_BASE}/meroShareView/myPortfolio/",
-                json={
-                    "sortBy": "script",
-                    "demat": [self.dmat],
-                    "clientCode": self.dpid,
-                    "page": 1,
-                    "size": 200,
-                    "sortAsc": True,
-                },
-            )
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        headers["Content-Type"] = "application/json"
+        
+        portfolio_req = requests.post(
+            f"{MS_API_BASE}/meroShareView/myPortfolio/",
+            json={
+                "sortBy": "script",
+                "demat": [self.dmat],
+                "clientCode": self.dpid,
+                "page": 1,
+                "size": 200,
+                "sortAsc": True,
+            },
+            headers=headers
+        )
 
-            if portfolio_req.status_code != 200:
-                logging.warning(f"Portfolio request failed for user: {self.name}\n {portfolio_req.content}")
-                raise LocalException(f"Portfolio request failed for user: {self.name}!")
+        if portfolio_req.status_code != 200:
+            logging.warning(f"Portfolio request failed for user: {self.name}\n {portfolio_req.content}")
+            raise LocalException(f"Portfolio request failed for user: {self.name}!")
 
-            portfolio_response_json = portfolio_req.json()
+        portfolio_response_json = portfolio_req.json()
 
-            entries: list[PortfolioEntry] = []
+        entries: list[PortfolioEntry] = []
 
-            for entry in portfolio_response_json.get("meroShareMyPortfolio"):
-                entries.append(
-                    PortfolioEntry(
-                        current_balance=float(entry.get("currentBalance")),
-                        last_transaction_price=float(entry.get("lastTransactionPrice")),
-                        previous_closing_price=float(entry.get("previousClosingPrice")),
-                        script=entry.get("script"),
-                        script_desc=entry.get("scriptDesc"),
-                        value_as_of_last_transaction_price=float(entry.get("valueAsOfLastTransactionPrice")),
-                        value_as_of_previous_closing_price=float(entry.get("valueAsOfPreviousClosingPrice")),
-                    )
+        for entry in portfolio_response_json.get("meroShareMyPortfolio"):
+            entries.append(
+                PortfolioEntry(
+                    current_balance=float(entry.get("currentBalance")),
+                    last_transaction_price=float(entry.get("lastTransactionPrice")),
+                    previous_closing_price=float(entry.get("previousClosingPrice")),
+                    script=entry.get("script"),
+                    script_desc=entry.get("scriptDesc"),
+                    value_as_of_last_transaction_price=float(entry.get("valueAsOfLastTransactionPrice")),
+                    value_as_of_previous_closing_price=float(entry.get("valueAsOfPreviousClosingPrice")),
                 )
-
-            new_portfolio = Portfolio(
-                entries=entries,
-                total_items=portfolio_response_json.get("totalItems"),
-                total_value_as_of_last_transaction_price=float(
-                    portfolio_response_json.get("totalValueAsOfLastTransactionPrice")
-                ),
-                total_value_as_of_previous_closing_price=float(
-                    portfolio_response_json.get("totalValueAsOfPreviousClosingPrice")
-                ),
             )
 
-            self.portfolio = new_portfolio
-            return new_portfolio
+        new_portfolio = Portfolio(
+            entries=entries,
+            total_items=portfolio_response_json.get("totalItems"),
+            total_value_as_of_last_transaction_price=float(
+                portfolio_response_json.get("totalValueAsOfLastTransactionPrice")
+            ),
+            total_value_as_of_previous_closing_price=float(
+                portfolio_response_json.get("totalValueAsOfPreviousClosingPrice")
+            ),
+        )
+
+        self.portfolio = new_portfolio
+        return new_portfolio
 
     @login_required
     @retry(
@@ -616,20 +627,22 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def find_min_apply_unit(self, company_share_id) -> int:
-        with self.__session as sess:
-            min_apply_unit_req = sess.get(
-                f"{MS_API_BASE}/meroShare/active/{company_share_id}",
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        min_apply_unit_req = requests.get(
+            f"{MS_API_BASE}/meroShare/active/{company_share_id}",
+            headers=headers
+        )
+
+        if min_apply_unit_req.status_code != 200:
+            logging.warning(
+                f"Min apply unit request failed for user: {self.name}\n {min_apply_unit_req.content}"
             )
+            raise LocalException(f"Min apply unit request failed for user: {self.name}!")
 
-            if min_apply_unit_req.status_code != 200:
-                logging.warning(
-                    f"Min apply unit request failed for user: {self.name}\n {min_apply_unit_req.content}"
-                )
-                raise LocalException(f"Min apply unit request failed for user: {self.name}!")
+        min_apply_unit_response_json = min_apply_unit_req.json()
 
-            min_apply_unit_response_json = min_apply_unit_req.json()
-
-            return int(min_apply_unit_response_json.get("minUnit"))
+        return int(min_apply_unit_response_json.get("minUnit"))
 
     @login_required
     @retry(
@@ -639,78 +652,82 @@ class Account:
         retry=retry_if_exception_type(LocalException),
     )
     def fetch_edis_history(self):
-        with self.__session as sess:
-            data = {
-                "filterFieldParams": [
-                    {
-                        "key": "requestStatus.name",
-                        "value": "",
-                        "alias": "Status",
-                    },
-                    {
-                        "key": "contractObligationMap.obligation.settleId",
-                        "alias": "Settlement Id",
-                    },
-                    {
-                        "key": "contractObligationMap.obligation.scriptCode",
-                        "alias": "Script",
-                    },
-                    {
-                        "key": "contractObligationMap.obligation.sellCmId",
-                        "alias": "CM ID",
-                        "condition": "': '",
-                    },
-                ],
-                "page": 1,
-                "size": 200,
-                "searchRoleViewConstants": "VIEW",
-                "filterDateParams": [
-                    {
-                        "key": "contractObligationMap.obligation.settleDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                    {
-                        "key": "contractObligationMap.obligation.settleDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                    {
-                        "key": "requestedDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                    {
-                        "key": "requestedDate",
-                        "condition": "",
-                        "alias": "",
-                        "value": "",
-                    },
-                ],
-            }
+        data = {
+            "filterFieldParams": [
+                {
+                    "key": "requestStatus.name",
+                    "value": "",
+                    "alias": "Status",
+                },
+                {
+                    "key": "contractObligationMap.obligation.settleId",
+                    "alias": "Settlement Id",
+                },
+                {
+                    "key": "contractObligationMap.obligation.scriptCode",
+                    "alias": "Script",
+                },
+                {
+                    "key": "contractObligationMap.obligation.sellCmId",
+                    "alias": "CM ID",
+                    "condition": "': '",
+                },
+            ],
+            "page": 1,
+            "size": 200,
+            "searchRoleViewConstants": "VIEW",
+            "filterDateParams": [
+                {
+                    "key": "contractObligationMap.obligation.settleDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+                {
+                    "key": "contractObligationMap.obligation.settleDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+                {
+                    "key": "requestedDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+                {
+                    "key": "requestedDate",
+                    "condition": "",
+                    "alias": "",
+                    "value": "",
+                },
+            ],
+        }
 
-            details_response = sess.post(
-                f"{MS_API_BASE}/EDIS/report/search/",
-                json=data,
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        headers["Content-Type"] = "application/json"
+        
+        details_response = requests.post(
+            f"{MS_API_BASE}/EDIS/report/search/",
+            json=data,
+            headers=headers
+        )
+
+        if details_response.status_code != 200:
+            logging.warning(
+                f"Apply failed! Status code: {details_response.status_code}, Message: {details_response.content}"
+            )
+            raise LocalException(f"Apply failed for user {self.name}!")
+
+        details_json = details_response.json()
+
+        for item in details_json.get("object"):
+            logging.info(
+                f"Script: {item.get('contract').get('obligation').get('scriptCode')}, Status: {item.get('statusName')}, for account: {self.name}"
             )
 
-            if details_response.status_code != 200:
-                logging.warning(
-                    f"Apply failed! Status code: {details_response.status_code}, Message: {details_response.content}"
-                )
-                raise LocalException(f"Apply failed for user {self.name}!")
-
-            details_json = details_response.json()
-
-            for item in details_json.get("object"):
-                logging.info(
-                    f"Script: {item.get('contract').get('obligation').get('scriptCode')}, Status: {item.get('statusName')}, for account: {self.name}"
-                )
-
-            return details_json.get("object")
+        return details_json.get("object")
 
     @retry(
         stop=stop_after_attempt(3),
@@ -734,66 +751,64 @@ class Account:
 
         assert share_id and quantity, "Share ID and quantity must be provided!"
 
-        with self.__session as sess:
-            issue_to_apply = None
+        issue_to_apply = None
 
-            logging.info(f"Applying {quantity} units of {share_id} for user: {self.name}")
+        logging.info(f"Applying {quantity} units of {share_id} for user: {self.name}")
 
-            applicable_issue = self.fetch_applicable_issues()
+        applicable_issue = self.fetch_applicable_issues()
 
-            for issue in applicable_issue:
-                if issue.get("companyShareId") == share_id:
-                    issue_to_apply = issue
+        for issue in applicable_issue:
+            if issue.get("companyShareId") == share_id:
+                issue_to_apply = issue
 
-            if not issue_to_apply:
-                logging.warning("Provided ID doesn't match any of the applicable issues!")
-                raise GlobalError("No matching applicable issues!")
+        if not issue_to_apply:
+            logging.warning("Provided ID doesn't match any of the applicable issues!")
+            raise GlobalError("No matching applicable issues!")
 
-            if issue_to_apply.get("action"):
-                logging.warning(f"Issue already applied! {issue_to_apply} for user: {self.name}")
-                return {
-                    "status": "CREATED",
-                    "message": "Issue already applied!",
-                }
-
-            headers = {
-                "Content-Type": "application/json",
-                "Pragma": "no-cache",
-                "Cache-Control": "no-cache",
+        if issue_to_apply.get("action"):
+            logging.warning(f"Issue already applied! {issue_to_apply} for user: {self.name}")
+            return {
+                "status": "CREATED",
+                "message": "Issue already applied!",
             }
 
-            sess.headers.update(headers)
+        headers = BASE_HEADERS.copy()
+        headers["Authorization"] = self.auth_token
+        headers["Content-Type"] = "application/json"
+        headers["Pragma"] = "no-cache"
+        headers["Cache-Control"] = "no-cache"
 
-            data = {
-                "demat": self.dmat,
-                "boid": self.dmat[-8:],
-                "accountNumber": self.account,
-                "customerId": self.customer_id,
-                "accountBranchId": self.branch_id,
-                "accountTypeId": self.account_type_id,
-                "appliedKitta": str(quantity),
-                "crnNumber": self.crn,
-                "transactionPIN": self.pin,
-                "companyShareId": str(share_id),
-                "bankId": self.bank_id,
-            }
+        data = {
+            "demat": self.dmat,
+            "boid": self.dmat[-8:],
+            "accountNumber": self.account,
+            "customerId": self.customer_id,
+            "accountBranchId": self.branch_id,
+            "accountTypeId": self.account_type_id,
+            "appliedKitta": str(quantity),
+            "crnNumber": self.crn,
+            "transactionPIN": self.pin,
+            "companyShareId": str(share_id),
+            "bankId": self.bank_id,
+        }
 
-            apply_req = sess.post(
-                f"{MS_API_BASE}/meroShare/applicantForm/share/apply",
-                json=data,
+        apply_req = requests.post(
+            f"{MS_API_BASE}/meroShare/applicantForm/share/apply",
+            json=data,
+            headers=headers
+        )
+
+        if apply_req.status_code != 201:
+            logging.warning(
+                f"Apply failed! Status code: {apply_req.status_code}, Message: {apply_req.content}"
             )
+            raise LocalException(f"Apply failed for user {self.name}!")
 
-            if apply_req.status_code != 201:
-                logging.warning(
-                    f"Apply failed! Status code: {apply_req.status_code}, Message: {apply_req.content}"
-                )
-                raise LocalException(f"Apply failed for user {self.name}!")
+        logging.info(f"Applied {quantity} kitta of {issue_to_apply.get('companyName')} for {self.name}!")
 
-            logging.info(f"Applied {quantity} kitta of {issue_to_apply.get('companyName')} for {self.name}!")
+        self.fetch_applied_issues()
 
-            self.fetch_applied_issues()
-
-            return apply_req.json()
+        return apply_req.json()
 
     def to_json(self):
         return {
